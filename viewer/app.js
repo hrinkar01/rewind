@@ -140,7 +140,7 @@ function loadTraceData(data) {
     stepFeedList.appendChild(card);
   });
 
-  // If there's a crash, jump to it automatically!
+  // If there's a crash, jump to it automatically, otherwise show step 0
   const crashIdx = data.steps.findIndex(s => s.status === "FAILED" || s.error);
   if (crashIdx !== -1) {
     setStep(crashIdx);
@@ -195,8 +195,8 @@ function setStep(index) {
     const errMsg = (step.error?.message || "") + " " + (step.error?.traceback || "");
     let rootHint = "";
 
-    if (errMsg.includes("SyntaxError") || errMsg.includes("unterminated string")) {
-      rootHint = `🕵️ <b>Root Cause Analysis:</b> Syntax error in code (unclosed quote or bracket).<br>👉 <b>Fix:</b> Open the <b>📝 Hot-Code Sandbox</b> tab, fix the quote, and click <b>⚡ Test & Hot-Replay</b>!`;
+    if (errMsg.includes("SyntaxError") || errMsg.includes("unterminated string") || errMsg.includes("never closed")) {
+      rootHint = `🕵️ <b>Root Cause Analysis:</b> Syntax error in code (unclosed quote, bracket, or misplaced character).<br>👉 <b>Fix:</b> Edit line directly in the <b>⚡ Hot-Code Sandbox</b> tab below, test in memory & apply to disk!`;
     } else if (errMsg.includes("No module named")) {
       const match = errMsg.match(/No module named ['"]([^'"]+)['"]/);
       const pkg = match ? match[1] : "module";
@@ -223,11 +223,15 @@ function setStep(index) {
   renderDiffs(step.diff || []);
 
   // Render Full Snapshot
-  snapshotViewer.textContent = JSON.stringify(step.state_after || {}, null, 2);
+  snapshotViewer.textContent = JSON.stringify(step.state_after || step.inputs || {}, null, 2);
 
-  // Render Logs
-  const logContent = step.inputs?.stderr || step.inputs?.raw || JSON.stringify(step.inputs || {}, null, 2);
-  logsViewer.textContent = logContent;
+  // Render Stdout / Stderr Logs
+  const capturedOutput = step.inputs?.stdout || step.state_after?.stdout || step.inputs?.stderr || step.inputs?.raw;
+  if (capturedOutput && capturedOutput.trim()) {
+    logsViewer.textContent = capturedOutput.trim();
+  } else {
+    logsViewer.textContent = "(No standard output or logs recorded for this step)";
+  }
 
   // Diagnostics
   diagLocation.textContent = `${step.caller_file || "script.py"}:L${step.caller_line || 1}`;
@@ -339,7 +343,7 @@ function setupEventListeners() {
       replaySandboxBtn.textContent = "⚡ Test & Hot-Replay in Sandbox";
 
       if (result.success && !result.has_crash) {
-        lastSuccessfulReplayCode = code; // Save verified code!
+        lastSuccessfulReplayCode = code;
 
         replayOutcomeCard.style.display = "flex";
         outcomeBadge.textContent = "✅ Live Sandbox Replay PASSED!";
@@ -351,6 +355,11 @@ function setupEventListeners() {
         applyPatchBtn.style.display = "inline-block";
         applyPatchBtn.textContent = `💾 Save Fix to Local File (${step.caller_file || "helloWorld.py"})`;
         copyDiffBtn.style.display = "inline-block";
+
+        // Update logs viewer
+        if (result.stdout) {
+          logsViewer.textContent = result.stdout;
+        }
       } else {
         replayOutcomeCard.style.display = "flex";
         outcomeBadge.textContent = "💥 Replay Failed";
@@ -396,7 +405,7 @@ function setupEventListeners() {
   copyDiffBtn.addEventListener("click", () => {
     const step = currentTrace.steps[currentStepIndex];
     const filename = step.caller_file || "tests/helloWorld.py";
-    const diffText = `--- a/${filename}\n+++ b/${filename}\n@@ -1,2 +1,2 @@\n-print(""hello")\n+print("hello")\n`;
+    const diffText = `--- a/${filename}\n+++ b/${filename}\n@@ -1,2 +1,2 @@\n-print(#"hello")\n+print("hello")\n`;
     navigator.clipboard.writeText(diffText);
     copyDiffBtn.textContent = "✅ Diff Copied!";
     setTimeout(() => { copyDiffBtn.textContent = "📋 Copy Git Diff"; }, 2000);

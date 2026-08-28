@@ -35,6 +35,26 @@ except (ImportError, ValueError):
 
 
 # --------------------------------------------------------------------------
+# Stream Interceptor (Prints live to terminal + captures into trace)
+# --------------------------------------------------------------------------
+class LiveTeeStream:
+    def __init__(self, original_stream):
+        self.orig = original_stream
+        self.buf = io.StringIO()
+
+    def write(self, s):
+        self.orig.write(s)
+        self.buf.write(s)
+
+    def flush(self):
+        self.orig.flush()
+        self.buf.flush()
+
+    def getvalue(self):
+        return self.buf.getvalue()
+
+
+# --------------------------------------------------------------------------
 # Server Management Utilities
 # --------------------------------------------------------------------------
 def is_port_in_use(port: int) -> bool:
@@ -111,7 +131,7 @@ def execute_hot_replay(payload: dict) -> dict:
             "stdout": std_out,
             "stderr": std_err,
             "timing_ms": elapsed,
-            "message": f"Script executed cleanly with zero errors! Output: {std_out.strip() or '(none)'}",
+            "message": f"Script executed cleanly with zero errors! Output:\n{std_out.strip() or '(none)'}",
         }
     except Exception as e:
         elapsed = round((time.perf_counter() - start_t) * 1000, 2)
@@ -125,7 +145,6 @@ def execute_hot_replay(payload: dict) -> dict:
 
 
 def find_file_in_project(filename: str) -> str:
-    """Finds a file by absolute path, relative path, or filename search across the project tree."""
     if not filename:
         return ""
     if os.path.isabs(filename) and os.path.exists(filename):
@@ -142,7 +161,6 @@ def find_file_in_project(filename: str) -> str:
         if os.path.exists(candidate_base) and os.path.isfile(candidate_base):
             return os.path.abspath(candidate_base)
 
-    # Recursive walk
     for root, _, files in os.walk(parent_dir):
         if base_name in files:
             return os.path.abspath(os.path.join(root, base_name))
@@ -178,7 +196,7 @@ def apply_patch_to_disk(payload: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Mode 1: Auto Python Script Tracer
+# Mode 1: Auto Python Script Tracer (with Live Stdout/Stderr Capture)
 # --------------------------------------------------------------------------
 def auto_trace_hook(tracer: Tracer):
     last_state = {}
@@ -241,20 +259,26 @@ def run_python_command(args):
     with open(script_path, "r", encoding="utf-8") as f:
         raw_source = f.read()
 
+    tee_out = LiveTeeStream(sys.stdout)
+    tee_err = LiveTeeStream(sys.stderr)
+
     sys.settrace(auto_trace_hook(tracer))
     start_time = time.time()
+    has_error = False
     try:
         code = compile(raw_source, script_path, "exec")
-        exec(code, {"__name__": "__main__", "__file__": script_path, "__builtins__": __builtins__})
+        with redirect_stdout(tee_out), redirect_stderr(tee_err):
+            exec(code, {"__name__": "__main__", "__file__": script_path, "__builtins__": __builtins__})
     except Exception as e:
         sys.settrace(None)
+        has_error = True
         tb_str = traceback.format_exc()
         print(f"\n💥 [Rewind] Caught Fatal Execution Exception: {type(e).__name__}: {e}")
         
         step_obj = tracer.record_step_data(
             name=f"💥 Fatal Crash: {type(e).__name__}",
-            inputs={"error": str(e), "source_code": raw_source, "filepath": script_path},
-            state_updates={"crashed": True, "error_type": type(e).__name__, "error_msg": str(e)},
+            inputs={"error": str(e), "source_code": raw_source, "filepath": script_path, "stdout": tee_out.getvalue(), "stderr": tee_err.getvalue()},
+            state_updates={"crashed": True, "error_type": type(e).__name__, "error_msg": str(e), "stdout": tee_out.getvalue()},
         )
         step_obj.caller_file = os.path.basename(script_path)
         step_obj.status = "FAILED"
@@ -267,6 +291,19 @@ def run_python_command(args):
         }
     finally:
         sys.settrace(None)
+        captured_stdout = tee_out.getvalue()
+        captured_stderr = tee_err.getvalue()
+
+        # If clean execution with no function calls (e.g. top-level print script), record top-level success step
+        if not has_error and len(tracer.steps) == 0:
+            step_obj = tracer.record_step_data(
+                name=f"exec: {os.path.basename(script_path)}",
+                inputs={"stdout": captured_stdout, "stderr": captured_stderr, "source_code": raw_source, "filepath": script_path},
+                state_updates={"stdout": captured_stdout, "status": "COMPLETED"},
+            )
+            step_obj.caller_file = os.path.basename(script_path)
+            step_obj.status = "SUCCESS"
+
         elapsed = round((time.time() - start_time) * 1000, 2)
         out = args.output or "rewind_trace.json"
         tracer.export(out)
@@ -302,17 +339,19 @@ def exec_process_command(args):
         return
 
     step_id = 0
+    full_stdout = []
     while True:
         line = process.stdout.readline()
         if not line and process.poll() is not None:
             break
         if line:
             step_id += 1
+            full_stdout.append(line)
             sys.stdout.write(line)
             tracer.record_step_data(
                 name=f"stdout: {line.strip()[:40]}",
-                inputs={"raw": line.strip()},
-                state_updates={"last_log": line.strip(), "step_count": step_id},
+                inputs={"raw": line.strip(), "stdout": "".join(full_stdout)},
+                state_updates={"last_log": line.strip(), "step_count": step_id, "stdout": "".join(full_stdout)},
             )
 
     stderr_out = process.stderr.read()
@@ -339,7 +378,7 @@ def exec_process_command(args):
         step_id += 1
         step_obj = tracer.record_step_data(
             name=f"💥 Crash: {err_type}",
-            inputs={"stderr": stderr_out.strip(), "exit_code": return_code},
+            inputs={"stderr": stderr_out.strip(), "exit_code": return_code, "stdout": "".join(full_stdout)},
             state_updates={"has_error": True, "error_type": err_type, "error_output": stderr_out.strip()},
         )
         step_obj.status = "FAILED"

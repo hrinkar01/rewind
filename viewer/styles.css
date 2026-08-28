@@ -169,6 +169,39 @@ body.dark-theme {
     box-shadow: 0 0 18px rgba(168, 85, 247, 0.5);
 }
 
+.btn-purple-glow {
+    background: linear-gradient(135deg, #7e22ce, #4f46e5);
+    color: #f3e8ff;
+    border: 1px solid #c084fc;
+    box-shadow: 0 0 10px rgba(192, 132, 252, 0.35);
+    font-weight: 700;
+}
+
+.btn-purple-glow:hover {
+    background: linear-gradient(135deg, #9333ea, #6366f1);
+    box-shadow: 0 0 16px rgba(192, 132, 252, 0.6);
+    color: #fff;
+}
+
+.btn-purple-banner {
+    background: linear-gradient(135deg, #9333ea, #4f46e5);
+    color: #fff;
+    border: 1px solid #c084fc;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+    transition: all 0.15s ease;
+}
+
+.btn-purple-banner:hover {
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    transform: translateY(-1px);
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.6);
+}
+
 .btn-green {
     background: linear-gradient(135deg, #059669, #10b981);
     color: #fff;
@@ -221,7 +254,7 @@ body.dark-theme {
 .playback-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 .ctrl-btn {
@@ -490,8 +523,9 @@ body.dark-theme {
 }
 
 .tab-btn.highlight-tab.active {
-    background: rgba(168, 85, 247, 0.18);
-    color: #e9d5ff;
+    background: rgba(168, 85, 247, 0.22);
+    color: #f3e8ff;
+    border: 1px solid rgba(168, 85, 247, 0.4);
 }
 
 .tab-pane {

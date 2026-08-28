@@ -83,7 +83,7 @@
 
         <!-- Col 2: State Diff, Snapshot, Hot-Code Sandbox, and Logs -->
         <section class="panel state-inspector-panel">
-            <!-- Prominent Crash Root Cause Banner -->
+            <!-- Hero Crash Banner -->
             <div class="hero-crash-banner" id="heroCrashBanner" style="display: none;">
                 <div class="crash-banner-header">
                     <span class="crash-badge-pill">💥 CRASH DETECTED AT THIS STEP</span>
@@ -94,36 +94,22 @@
                 <div class="root-cause-hint" id="rootCauseHint"></div>
             </div>
 
+            <!-- Clean Single Unified Tab Bar -->
             <div class="panel-header">
                 <div class="tab-group">
-                    <button class="tab-btn active" data-tab="diff">⚡ State Diff (Changes)</button>
+                    <button class="tab-btn highlight-tab active" data-tab="sandbox">⚡ Hot-Code Sandbox</button>
+                    <button class="tab-btn" data-tab="diff">⚡ State Diff</button>
                     <button class="tab-btn" data-tab="snapshot">📦 Full Snapshot</button>
-                    <button class="tab-btn highlight-tab" data-tab="sandbox">📝 Hot-Code Sandbox ⚡</button>
                     <button class="tab-btn" data-tab="logs">🖥️ Output / Logs</button>
                 </div>
             </div>
 
-            <!-- Tab 1: State Diff -->
-            <div class="tab-pane active" id="tab-diff">
-                <div class="diff-summary-bar">
-                    <span class="diff-stat added" id="diffAddedCount">+0 Added</span>
-                    <span class="diff-stat mutated" id="diffMutatedCount">~0 Mutated</span>
-                    <span class="diff-stat removed" id="diffRemovedCount">-0 Removed</span>
-                </div>
-                <div class="diff-feed" id="diffFeed"></div>
-            </div>
-
-            <!-- Tab 2: Full Snapshot -->
-            <div class="tab-pane" id="tab-snapshot">
-                <pre class="code-viewer" id="snapshotViewer">{}</pre>
-            </div>
-
-            <!-- Tab 3: Hot-Code Sandbox (Live Multi-line Code Fix & Replayer) -->
-            <div class="tab-pane" id="tab-sandbox">
+            <!-- Tab 1: Single Unified Hot-Code Sandbox -->
+            <div class="tab-pane active" id="tab-sandbox">
                 <div class="sandbox-header">
                     <div>
-                        <h4 class="sandbox-title">⚡ Live Time-Travel Code Patcher</h4>
-                        <span class="sandbox-desc">Edit Python logic for this script. Test in memory & save to disk!</span>
+                        <h4 class="sandbox-title">⚡ Live Code Patcher</h4>
+                        <span class="sandbox-desc">Edit Python logic directly. Test in memory & apply to disk!</span>
                     </div>
                 </div>
 
@@ -149,6 +135,21 @@
                     </div>
                     <p class="outcome-msg" id="outcomeMsg">Script executed cleanly with zero errors!</p>
                 </div>
+            </div>
+
+            <!-- Tab 2: State Diff -->
+            <div class="tab-pane" id="tab-diff">
+                <div class="diff-summary-bar">
+                    <span class="diff-stat added" id="diffAddedCount">+0 Added</span>
+                    <span class="diff-stat mutated" id="diffMutatedCount">~0 Mutated</span>
+                    <span class="diff-stat removed" id="diffRemovedCount">-0 Removed</span>
+                </div>
+                <div class="diff-feed" id="diffFeed"></div>
+            </div>
+
+            <!-- Tab 3: Full Snapshot -->
+            <div class="tab-pane" id="tab-snapshot">
+                <pre class="code-viewer" id="snapshotViewer">{}</pre>
             </div>
 
             <!-- Tab 4: Logs / Output -->

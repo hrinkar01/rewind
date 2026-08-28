@@ -1,60 +1,48 @@
 {
   "schema_version": "1.0.0",
   "title": "Auto-Trace: helloWorld.py",
-  "created_at": "2026-08-28 18:16:19",
-  "has_crash": true,
+  "created_at": "2026-08-28 18:46:00",
+  "has_crash": false,
   "total_steps": 1,
-  "total_duration_ms": 25.62,
+  "total_duration_ms": 20.33,
   "final_state": {
-    "crashed": true,
-    "error_type": "SyntaxError",
-    "error_msg": "unterminated string literal (detected at line 2) (helloWorld.py, line 2)"
+    "stdout": "Hello World!\nhello\n",
+    "status": "COMPLETED"
   },
   "steps": [
     {
       "step_id": 1,
-      "name": "\ud83d\udca5 Fatal Crash: SyntaxError",
+      "name": "exec: helloWorld.py",
       "caller_file": "helloWorld.py",
       "caller_line": 0,
       "inputs": {
-        "error": "unterminated string literal (detected at line 2) (helloWorld.py, line 2)",
-        "source_code": "print(\"Hello World!\")\nprint(\"\"hello\") ",
+        "stdout": "Hello World!\nhello\n",
+        "stderr": "",
+        "source_code": "print(\"Hello World!\")\nprint(\"hello\") ",
         "filepath": "/Users/hrinkar/Documents/projects/rewind/tests/helloWorld.py"
       },
       "output": null,
       "state_before": {},
       "state_after": {
-        "crashed": true,
-        "error_type": "SyntaxError",
-        "error_msg": "unterminated string literal (detected at line 2) (helloWorld.py, line 2)"
+        "stdout": "Hello World!\nhello\n",
+        "status": "COMPLETED"
       },
       "diff": [
         {
           "type": "added",
-          "path": "crashed",
-          "value": true
+          "path": "status",
+          "value": "COMPLETED"
         },
         {
           "type": "added",
-          "path": "error_type",
-          "value": "SyntaxError"
-        },
-        {
-          "type": "added",
-          "path": "error_msg",
-          "value": "unterminated string literal (detected at line 2) (helloWorld.py, line 2)"
+          "path": "stdout",
+          "value": "Hello World!\nhello\n"
         }
       ],
       "duration_us": 0.0,
-      "timestamp": 1787921179.778466,
-      "status": "FAILED",
-      "error": {
-        "type": "SyntaxError",
-        "message": "unterminated string literal (detected at line 2) (helloWorld.py, line 2)",
-        "traceback": "Traceback (most recent call last):\n  File \"/Users/hrinkar/Documents/projects/rewind/rewind/cli.py\", line 247, in run_python_command\n    code = compile(raw_source, script_path, \"exec\")\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/hrinkar/Documents/projects/rewind/tests/helloWorld.py\", line 2\n    print(\"\"hello\") \n                 ^\nSyntaxError: unterminated string literal (detected at line 2)\n",
-        "source_code": "print(\"Hello World!\")\nprint(\"\"hello\") ",
-        "filepath": "/Users/hrinkar/Documents/projects/rewind/tests/helloWorld.py"
-      }
+      "timestamp": 1787922960.3433201,
+      "status": "SUCCESS",
+      "error": null
     }
   ]
 }
