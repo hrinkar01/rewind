@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rewind ⏪ Deterministic Time-Travel Debugger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="dark-theme">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="logo-group">
+            <div class="logo-icon">⏪</div>
+            <div>
+                <h1 class="logo-title">Rewind</h1>
+                <span class="logo-subtitle">Deterministic Time-Travel Debugger</span>
+            </div>
+        </div>
+
+        <div class="trace-summary">
+            <div class="summary-badge" id="crashBadge">
+                <span class="badge-dot"></span>
+                <span id="crashStatusText">Loading trace...</span>
+            </div>
+            <div class="summary-stat">
+                <span class="stat-label">Steps:</span>
+                <span class="stat-value" id="totalStepsCount">0</span>
+            </div>
+            <div class="summary-stat">
+                <span class="stat-label">Total Time:</span>
+                <span class="stat-value" id="totalTime">0 ms</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <input type="file" id="traceFileInput" accept=".json" style="display: none;">
+            <button class="btn btn-secondary" id="loadTraceBtn">📂 Load Trace</button>
+            <button class="btn btn-secondary crash-btn" id="stopServerBtn" title="Cleanly shutdown web server">🛑 Stop Server</button>
+        </div>
+    </header>
+
+    <!-- Hero Timeline Scrubber -->
+    <section class="timeline-hero">
+        <div class="timeline-top-row">
+            <div class="active-step-callout">
+                <span class="step-badge" id="currentStepBadge">Step 1 of 1</span>
+                <h2 class="step-title" id="currentStepTitle">No Trace Loaded</h2>
+            </div>
+
+            <div class="playback-controls">
+                <button class="ctrl-btn" id="firstStepBtn" title="First Step (Home)">⏮</button>
+                <button class="ctrl-btn" id="prevStepBtn" title="Step Back (Left Arrow)">◀</button>
+                <button class="ctrl-btn play-btn" id="playPauseBtn" title="Play/Pause (Space)">▶ Play</button>
+                <button class="ctrl-btn" id="nextStepBtn" title="Step Forward (Right Arrow)">▶</button>
+                <button class="ctrl-btn" id="lastStepBtn" title="Last Step (End)">⏭</button>
+                <button class="ctrl-btn crash-btn" id="jumpCrashBtn" title="Jump to Crash" style="display: none;">🚨 Jump to Crash</button>
+            </div>
+        </div>
+
+        <!-- Scrubber Slider -->
+        <div class="scrubber-container">
+            <input type="range" id="scrubberSlider" min="1" max="1" value="1" class="scrubber-slider">
+            <div class="scrubber-ticks" id="scrubberTicks"></div>
+        </div>
+    </section>
+
+    <!-- 3-Column Cockpit -->
+    <main class="cockpit-grid">
+        <!-- Col 1: Step Feed -->
+        <aside class="panel step-feed-panel">
+            <div class="panel-header">
+                <span class="panel-title">📜 Step Timeline</span>
+                <span class="panel-count" id="stepFeedCount">0 steps</span>
+            </div>
+            <div class="step-feed-list" id="stepFeedList"></div>
+        </aside>
+
+        <!-- Col 2: State Diff, Snapshot, Hot-Code Sandbox, and Logs -->
+        <section class="panel state-inspector-panel">
+            <!-- Prominent Crash Root Cause Banner -->
+            <div class="hero-crash-banner" id="heroCrashBanner" style="display: none;">
+                <div class="crash-banner-header">
+                    <span class="crash-badge-pill">💥 CRASH DETECTED AT THIS STEP</span>
+                    <span class="crash-location-pill" id="bannerLocation">script.py:L1</span>
+                </div>
+                <h3 class="crash-banner-title" id="bannerErrorType">TypeError</h3>
+                <p class="crash-banner-desc" id="bannerErrorMsg">An unhandled exception occurred.</p>
+                <div class="root-cause-hint" id="rootCauseHint"></div>
+            </div>
+
+            <div class="panel-header">
+                <div class="tab-group">
+                    <button class="tab-btn active" data-tab="diff">⚡ State Diff (Changes)</button>
+                    <button class="tab-btn" data-tab="snapshot">📦 Full Snapshot</button>
+                    <button class="tab-btn highlight-tab" data-tab="sandbox">📝 Hot-Code Sandbox ⚡</button>
+                    <button class="tab-btn" data-tab="logs">🖥️ Output / Logs</button>
+                </div>
+            </div>
+
+            <!-- Tab 1: State Diff -->
+            <div class="tab-pane active" id="tab-diff">
+                <div class="diff-summary-bar">
+                    <span class="diff-stat added" id="diffAddedCount">+0 Added</span>
+                    <span class="diff-stat mutated" id="diffMutatedCount">~0 Mutated</span>
+                    <span class="diff-stat removed" id="diffRemovedCount">-0 Removed</span>
+                </div>
+                <div class="diff-feed" id="diffFeed"></div>
+            </div>
+
+            <!-- Tab 2: Full Snapshot -->
+            <div class="tab-pane" id="tab-snapshot">
+                <pre class="code-viewer" id="snapshotViewer">{}</pre>
+            </div>
+
+            <!-- Tab 3: Hot-Code Sandbox (Live Multi-line Code Fix & Replayer) -->
+            <div class="tab-pane" id="tab-sandbox">
+                <div class="sandbox-header">
+                    <div>
+                        <h4 class="sandbox-title">⚡ Live Time-Travel Code Patcher</h4>
+                        <span class="sandbox-desc">Edit Python logic for this script. Test in memory & save to disk!</span>
+                    </div>
+                </div>
+
+                <div class="editor-wrapper">
+                    <div class="editor-label-bar">
+                        <span>🐍 Python Source Code</span>
+                        <span class="font-mono text-muted" id="sandboxStepLabel">script.py</span>
+                    </div>
+                    <textarea class="code-editor" id="sandboxCodeEditor" spellcheck="false" placeholder="Write or fix Python code here..."></textarea>
+                </div>
+
+                <div class="sandbox-action-bar">
+                    <button class="btn btn-purple" id="replaySandboxBtn">⚡ Test & Hot-Replay in Sandbox</button>
+                    <button class="btn btn-green" id="applyPatchBtn" style="display: none;">💾 Save Fix to Local File</button>
+                    <button class="btn btn-secondary" id="copyDiffBtn" style="display: none;">📋 Copy Git Diff</button>
+                </div>
+
+                <!-- Live Replay Outcome Banner -->
+                <div class="replay-outcome-card" id="replayOutcomeCard" style="display: none;">
+                    <div class="outcome-header">
+                        <span class="outcome-badge" id="outcomeBadge">✅ Replay Succeeded</span>
+                        <span class="outcome-timing" id="outcomeTiming">Replayed in 0.5 ms</span>
+                    </div>
+                    <p class="outcome-msg" id="outcomeMsg">Script executed cleanly with zero errors!</p>
+                </div>
+            </div>
+
+            <!-- Tab 4: Logs / Output -->
+            <div class="tab-pane" id="tab-logs">
+                <pre class="code-viewer font-mono" id="logsViewer" style="color: #38bdf8;">(No output recorded)</pre>
+            </div>
+        </section>
+
+        <!-- Col 3: Diagnostics & Crash Details -->
+        <aside class="panel diagnostics-panel">
+            <div class="panel-header">
+                <span class="panel-title">🔬 Step Diagnostics</span>
+            </div>
+
+            <div class="diag-card">
+                <span class="diag-label">Location / Origin</span>
+                <div class="diag-value font-mono" id="diagLocation">script.py:L1</div>
+            </div>
+
+            <div class="diag-card">
+                <span class="diag-label">Execution Duration</span>
+                <div class="diag-value font-mono" id="diagDuration">0 μs</div>
+            </div>
+
+            <div class="diag-card">
+                <span class="diag-label">Step Status</span>
+                <div class="diag-value" id="diagStatus">
+                    <span class="status-pill status-success">SUCCESS</span>
+                </div>
+            </div>
+
+            <!-- Detailed Stacktrace Box -->
+            <div class="crash-box" id="crashBox" style="display: none;">
+                <div class="crash-header">
+                    <span class="crash-icon">💥</span>
+                    <span class="crash-type" id="crashType">Exception Traceback</span>
+                </div>
+                <pre class="crash-trace" id="crashTrace"></pre>
+            </div>
+        </aside>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

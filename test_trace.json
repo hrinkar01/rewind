@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Rewind Execution Trace",
+  "created_at": "2026-08-27 03:13:19",
+  "has_crash": false,
+  "total_steps": 3,
+  "total_duration_ms": 0.06,
+  "final_state": {
+    "user": "Alice",
+    "coins": 80,
+    "inventory": [
+      "Sword"
+    ]
+  },
+  "steps": [
+    {
+      "step_id": 1,
+      "name": "Init User",
+      "caller_file": "<string>",
+      "caller_line": 9,
+      "inputs": {
+        "user_id": 42
+      },
+      "output": null,
+      "state_before": {},
+      "state_after": {
+        "user": "Alice",
+        "coins": 100
+      },
+      "diff": [
+        {
+          "type": "added",
+          "path": "coins",
+          "value": 100
+        },
+        {
+          "type": "added",
+          "path": "user",
+          "value": "Alice"
+        }
+      ],
+      "duration_us": 0.75,
+      "timestamp": 1787780599.999465,
+      "status": "SUCCESS",
+      "error": null
+    },
+    {
+      "step_id": 2,
+      "name": "Spend Coins",
+      "caller_file": "<string>",
+      "caller_line": 14,
+      "inputs": {
+        "item": "Sword"
+      },
+      "output": null,
+      "state_before": {
+        "user": "Alice",
+        "coins": 100
+      },
+      "state_after": {
+        "user": "Alice",
+        "coins": 80,
+        "inventory": [
+          "Sword"
+        ]
+      },
+      "diff": [
+        {
+          "type": "added",
+          "path": "inventory",
+          "value": [
+            "Sword"
+          ]
+        },
+        {
+          "type": "mutated",
+          "path": "coins",
+          "prev_value": 100,
+          "new_value": 80
+        }
+      ],
+      "duration_us": 0.67,
+      "timestamp": 1787780599.9994931,
+      "status": "SUCCESS",
+      "error": null
+    },
+    {
+      "step_id": 3,
+      "name": "Check Inventory",
+      "caller_file": "<string>",
+      "caller_line": 19,
+      "inputs": {},
+      "output": null,
+      "state_before": {
+        "user": "Alice",
+        "coins": 80,
+        "inventory": [
+          "Sword"
+        ]
+      },
+      "state_after": {
+        "user": "Alice",
+        "coins": 80,
+        "inventory": [
+          "Sword"
+        ]
+      },
+      "diff": [],
+      "duration_us": 0.21,
+      "timestamp": 1787780599.9995039,
+      "status": "SUCCESS",
+      "error": null
+    }
+  ]
+}
