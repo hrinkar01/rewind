@@ -196,7 +196,7 @@ def apply_patch_to_disk(payload: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Mode 1: Auto Python Script Tracer (with Live Stdout/Stderr Capture)
+# Mode 1: Auto Python Script Tracer (with Local Path & SystemExit Handling)
 # --------------------------------------------------------------------------
 def auto_trace_hook(tracer: Tracer):
     last_state = {}
@@ -251,6 +251,10 @@ def run_python_command(args):
         print(f"❌ Error: File '{args.script}' not found.")
         sys.exit(1)
 
+    script_dir = os.path.dirname(script_path)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+
     tracer = get_global_tracer()
     tracer.title = f"Auto-Trace: {os.path.basename(script_path)}"
     print(f"⚡ [Rewind] Auto-tracing Python script: {script_path}")
@@ -269,6 +273,19 @@ def run_python_command(args):
         code = compile(raw_source, script_path, "exec")
         with redirect_stdout(tee_out), redirect_stderr(tee_err):
             exec(code, {"__name__": "__main__", "__file__": script_path, "__builtins__": __builtins__})
+    except SystemExit as se:
+        sys.settrace(None)
+        if se.code != 0 and se.code is not None:
+            has_error = True
+            print(f"\n💥 [Rewind] Process exited with error code: {se.code}")
+            step_obj = tracer.record_step_data(
+                name=f"💥 SystemExit: {se.code}",
+                inputs={"exit_code": se.code, "source_code": raw_source, "filepath": script_path, "stdout": tee_out.getvalue(), "stderr": tee_err.getvalue()},
+                state_updates={"crashed": True, "error_type": "SystemExit", "error_msg": f"Exited with code {se.code}", "stdout": tee_out.getvalue()},
+            )
+            step_obj.caller_file = os.path.basename(script_path)
+            step_obj.status = "FAILED"
+            step_obj.error = {"type": "SystemExit", "message": f"Exit code {se.code}"}
     except Exception as e:
         sys.settrace(None)
         has_error = True
@@ -294,7 +311,6 @@ def run_python_command(args):
         captured_stdout = tee_out.getvalue()
         captured_stderr = tee_err.getvalue()
 
-        # If clean execution with no function calls (e.g. top-level print script), record top-level success step
         if not has_error and len(tracer.steps) == 0:
             step_obj = tracer.record_step_data(
                 name=f"exec: {os.path.basename(script_path)}",
@@ -313,7 +329,7 @@ def run_python_command(args):
 
 
 # --------------------------------------------------------------------------
-# Mode 2: Universal Process Wrapper
+# Mode 2: Universal Process Wrapper (with Graceful Ctrl+C Handling)
 # --------------------------------------------------------------------------
 def exec_process_command(args):
     cmd = args.command
@@ -340,22 +356,30 @@ def exec_process_command(args):
 
     step_id = 0
     full_stdout = []
-    while True:
-        line = process.stdout.readline()
-        if not line and process.poll() is not None:
-            break
-        if line:
-            step_id += 1
-            full_stdout.append(line)
-            sys.stdout.write(line)
-            tracer.record_step_data(
-                name=f"stdout: {line.strip()[:40]}",
-                inputs={"raw": line.strip(), "stdout": "".join(full_stdout)},
-                state_updates={"last_log": line.strip(), "step_count": step_id, "stdout": "".join(full_stdout)},
-            )
+    return_code = 0
+    stderr_out = ""
 
-    stderr_out = process.stderr.read()
-    return_code = process.poll()
+    try:
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                step_id += 1
+                full_stdout.append(line)
+                sys.stdout.write(line)
+                tracer.record_step_data(
+                    name=f"stdout: {line.strip()[:40]}",
+                    inputs={"raw": line.strip(), "stdout": "".join(full_stdout)},
+                    state_updates={"last_log": line.strip(), "step_count": step_id, "stdout": "".join(full_stdout)},
+                )
+
+        stderr_out = process.stderr.read()
+        return_code = process.poll()
+    except KeyboardInterrupt:
+        print("\n🛑 [Rewind] Process stopped by user (SIGINT).")
+        process.terminate()
+        return_code = 130
 
     if stderr_out or return_code != 0:
         if stderr_out:
@@ -374,6 +398,8 @@ def exec_process_command(args):
             err_type = "SyntaxError"
         elif "npm error" in stderr_out:
             err_type = "NpmScriptError"
+        elif return_code == 130:
+            err_type = "InterruptedByUser"
 
         step_id += 1
         step_obj = tracer.record_step_data(

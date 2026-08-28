@@ -2,7 +2,6 @@
 Core execution tracer and timeline recording engine for Rewind.
 """
 
-import functools
 import inspect
 import json
 import os
@@ -10,7 +9,7 @@ import threading
 import time
 import traceback
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .diff import compute_state_diff, serialize_state
 
@@ -35,7 +34,7 @@ class TraceStep:
         self.diff: List[Dict[str, Any]] = []
         self.duration_us: float = 0.0
         self.timestamp: float = time.time()
-        self.status: str = "PENDING"  # SUCCESS or FAILED
+        self.status: str = "PENDING"
         self.error: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -116,13 +115,16 @@ class Tracer:
         try:
             yield self.state
             step_obj.status = "SUCCESS"
-        except Exception as e:
-            step_obj.status = "FAILED"
-            step_obj.error = {
-                "type": type(e).__name__,
-                "message": str(e),
-                "traceback": traceback.format_exc(),
-            }
+        except BaseException as e:
+            if isinstance(e, SystemExit) and (e.code == 0 or e.code is None):
+                step_obj.status = "SUCCESS"
+            else:
+                step_obj.status = "FAILED"
+                step_obj.error = {
+                    "type": type(e).__name__,
+                    "message": str(e),
+                    "traceback": traceback.format_exc(),
+                }
             raise
         finally:
             end_t = time.perf_counter()
@@ -150,8 +152,11 @@ class Tracer:
             }
 
     def export(self, filepath: str = "rewind_trace.json") -> str:
-        """Saves the timeline trace to a JSON file."""
+        """Saves the timeline trace to a JSON file (creating parent directories automatically)."""
         data = self.to_dict()
+        dir_name = os.path.dirname(filepath)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         return filepath

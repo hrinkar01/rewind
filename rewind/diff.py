@@ -1,47 +1,64 @@
-import copy 
-# pyrefly: ignore [missing-import]
-from typing import Dict, Any, List, Optional, Set
+"""
+High-performance structural diffing and circular-safe object serializer.
+"""
 
-def serialize_state(obj, max_depth=6, seen=None):
+from typing import Any, Dict, List, Optional, Set
+
+
+def serialize_state(obj: Any, max_depth: int = 6, seen: Optional[Set[int]] = None) -> Any:
+    """Recursively serializes any Python data structure or object into a JSON-serializable structure."""
     if seen is None:
-        seen=set()
+        seen = set()
+
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
 
-    # 2. Prevent infinite loops on circular references
-    obj_id = id(obj)
-    if obj_id in seen:
-        return f"<CircularRef: {type(obj).__name__}>"
+    # 1. Prevent infinite loops on circular references
+    try:
+        obj_id = id(obj)
+        if obj_id in seen:
+            return f"<CircularRef: {type(obj).__name__}>"
 
-    # Stop if object nesting is too deep (e.g. > 6 levels)
-    if max_depth <= 0:
-        return f"<MaxDepthReached: {type(obj).__name__}>"
+        if max_depth <= 0:
+            return f"<MaxDepthReached: {type(obj).__name__}>"
 
-    seen.add(obj_id)
+        seen.add(obj_id)
 
-    # 3. Handle Dictionaries
-    if isinstance(obj, dict):
-        return {str(k): serialize_state(v, max_depth - 1, set(seen)) for k, v in obj.items()}
-    
-    # 4. Handle Lists & Tuples
-    if isinstance(obj, (list, tuple)):
-        return [serialize_state(item, max_depth - 1, set(seen)) for item in obj]
-   
-    # 5. Handle Sets
-    if isinstance(obj, set):
-        return [serialize_state(item, max_depth - 1, set(seen)) for item in sorted(list(obj), key=str)]
-    
-    # 6. Handle Custom Objects / Classes
-    if hasattr(obj, "__dict__"):
-        clean_vars = {k: v for k, v in vars(obj).items() if not k.startswith("_")}
-        return {
-            "__class__": obj.__class__.__name__,
-            "__data__": serialize_state(clean_vars, max_depth - 1, set(seen))
-        }
-    # 7. Fallback to string representation for anything else
-    return repr(obj)
+        # 2. Dictionaries
+        if isinstance(obj, dict):
+            return {str(k): serialize_state(v, max_depth - 1, set(seen)) for k, v in obj.items()}
 
-def compute_state_diff(prev_state, curr_state, path="root"):
+        # 3. Lists & Tuples
+        if isinstance(obj, (list, tuple)):
+            return [serialize_state(item, max_depth - 1, set(seen)) for item in obj]
+
+        # 4. Sets
+        if isinstance(obj, set):
+            try:
+                sorted_items = sorted(list(obj), key=lambda x: str(x))
+            except Exception:
+                sorted_items = list(obj)
+            return [serialize_state(item, max_depth - 1, set(seen)) for item in sorted_items]
+
+        # 5. Custom Objects / Classes
+        if hasattr(obj, "__dict__"):
+            try:
+                clean_vars = {k: v for k, v in vars(obj).items() if not k.startswith("_")}
+                return {
+                    "__class__": obj.__class__.__name__,
+                    "__data__": serialize_state(clean_vars, max_depth - 1, set(seen)),
+                }
+            except Exception:
+                pass
+
+        # 6. Safe String Fallback
+        return repr(obj)
+    except Exception as e:
+        return f"<Unserializable: {type(obj).__name__} ({str(e)})>"
+
+
+def compute_state_diff(prev_state: Any, curr_state: Any, path: str = "root") -> List[Dict[str, Any]]:
+    """Recursively compares two states and computes added (+), removed (-), and mutated (~) diffs."""
     diffs = []
 
     # Case 1: Both are Dictionaries
@@ -49,25 +66,25 @@ def compute_state_diff(prev_state, curr_state, path="root"):
         prev_keys = set(prev_state.keys())
         curr_keys = set(curr_state.keys())
 
-        # 1. Added Keys (in curr, but NOT in prev)
+        # Added Keys
         for k in curr_keys - prev_keys:
             key_path = f"{path}.{k}" if path != "root" else str(k)
             diffs.append({
                 "type": "added",
                 "path": key_path,
-                "value": serialize_state(curr_state[k])
+                "value": serialize_state(curr_state[k]),
             })
 
-        # 2. Removed Keys (in prev, but NOT in curr)
+        # Removed Keys
         for k in prev_keys - curr_keys:
             key_path = f"{path}.{k}" if path != "root" else str(k)
             diffs.append({
                 "type": "removed",
                 "path": key_path,
-                "prev_value": serialize_state(prev_state[k])
+                "prev_value": serialize_state(prev_state[k]),
             })
 
-        # 3. Common Keys (in BOTH prev and curr)
+        # Common Keys
         for k in prev_keys & curr_keys:
             key_path = f"{path}.{k}" if path != "root" else str(k)
             v_prev = prev_state[k]
@@ -81,18 +98,18 @@ def compute_state_diff(prev_state, curr_state, path="root"):
                         "type": "mutated",
                         "path": key_path,
                         "prev_value": serialize_state(v_prev),
-                        "new_value": serialize_state(v_curr)
+                        "new_value": serialize_state(v_curr),
                     })
 
         return diffs
 
-    # Case 2: Primitive Value Comparison (e.g. comparing 10 to 20)
+    # Case 2: Primitive or Non-Dict Value Comparison
     if prev_state != curr_state:
         diffs.append({
             "type": "mutated",
             "path": path,
             "prev_value": serialize_state(prev_state),
-            "new_value": serialize_state(curr_state)
+            "new_value": serialize_state(curr_state),
         })
 
     return diffs

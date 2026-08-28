@@ -1,9 +1,13 @@
 """
-Unit test suite for Rewind Core SDK.
+Comprehensive unit test suite for Rewind Core SDK & Edge Cases.
 """
 
+import os
+import shutil
+import tempfile
+import threading
 import unittest
-from rewind.diff import serialize_state, compute_state_diff
+from rewind.diff import compute_state_diff, serialize_state
 from rewind.tracer import Tracer, TraceStep
 
 
@@ -41,6 +45,16 @@ class TestRewindSerialization(unittest.TestCase):
         self.assertEqual(res["__data__"]["age"], 30)
         self.assertNotIn("_secret", res["__data__"])
 
+    def test_unserializable_property_fallback(self):
+        class BuggyObject:
+            @property
+            def broken(self):
+                raise RuntimeError("Access denied")
+
+        b = BuggyObject()
+        res = serialize_state(b)
+        self.assertIsNotNone(res)
+
 
 class TestRewindStateDiff(unittest.TestCase):
     def test_added_keys(self):
@@ -70,6 +84,13 @@ class TestRewindStateDiff(unittest.TestCase):
         self.assertEqual(diffs[0]["prev_value"], 100)
         self.assertEqual(diffs[0]["new_value"], 200)
 
+    def test_none_to_dict_diff(self):
+        before = None
+        after = {"user": "alice"}
+        diffs = compute_state_diff(before, after)
+        self.assertEqual(len(diffs), 1)
+        self.assertEqual(diffs[0]["type"], "mutated")
+
 
 class TestRewindTracer(unittest.TestCase):
     def test_tracer_step_lifecycle(self):
@@ -95,6 +116,34 @@ class TestRewindTracer(unittest.TestCase):
         self.assertEqual(step.status, "FAILED")
         self.assertIsNotNone(step.error)
         self.assertEqual(step.error["type"], "ZeroDivisionError")
+
+    def test_nested_directory_export(self):
+        tracer = Tracer(title="Nested Export Test")
+        with tracer.step("Step 1") as state:
+            state["ok"] = True
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            target_path = os.path.join(temp_dir, "nested", "folder", "trace.json")
+            tracer.export(target_path)
+            self.assertTrue(os.path.exists(target_path))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_multithreaded_step_recording(self):
+        tracer = Tracer(title="Concurrency Test")
+
+        def worker(idx):
+            tracer.record_step_data(name=f"Worker {idx}", state_updates={f"k_{idx}": idx})
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(tracer.steps), 10)
+        self.assertEqual(len(tracer.state), 10)
 
 
 if __name__ == "__main__":
