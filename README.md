@@ -4,7 +4,7 @@
 
 ### **Deterministic Time-Travel Debugger & Live Hot-Code Patcher**
 
-*Airplane Flight Recorder for Code — Visual Execution Scrubbing, Sub-Microsecond State Diffing, and In-Memory Hot-Patching.*
+*Automated Runtime State Inspection, Sub-Microsecond State Diffing, and In-Memory Hot-Patching for Developers.*
 
 <br/>
 
@@ -38,14 +38,14 @@ Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repeti
 
 ---
 
-## ⚡ The Solution: Flight Recorder for Code
+## ⚡ The Solution: Deterministic Time-Travel Execution
 
 > [!IMPORTANT]
-> **Rewind is an Airplane Flight Recorder for your software.** Run your program once. If it crashes, open the visual cockpit, drag the timeline backward in time to catch the exact state corruption, test a multi-line fix in memory in **0.5 ms**, and save it directly to disk with 1 click.
+> **Rewind provides complete runtime state observability for your software.** Run your program once. If it crashes, open the visual cockpit, drag the timeline backward in time to inspect the exact memory state at each step, test a multi-line fix in memory in **0.5 ms**, and apply it directly to disk with 1 click.
 
 ### The 4-Step Hot-Code Workflow
 
-1. **Record Once:** Rewind captures microsecond-level memory snapshots before and after every transition.
+1. **Deterministic Recording:** Rewind captures microsecond-level memory snapshots before and after every transition.
 2. **Time-Travel Scrubbing:** Drag the timeline slider **backward in time** to find the exact frame where a variable was corrupted.
 3. **Live Hot-Code Sandbox:** Rewrite broken logic directly in the browser dashboard and verify downstream steps in **0.5 ms** in memory.
 4. **1-Click Atomic Disk Sync:** Click **"Save Fix to Local File"** to apply the fix directly to your source file with automatic `.bak` backups.
