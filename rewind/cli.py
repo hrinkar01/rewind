@@ -34,6 +34,9 @@ except (ImportError, ValueError):
     from rewind.tracer import Tracer, TraceStep, get_global_tracer
 
 
+REWIND_INTERNAL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 # --------------------------------------------------------------------------
 # Stream Interceptor (Prints live to terminal + captures into trace)
 # --------------------------------------------------------------------------
@@ -75,7 +78,7 @@ def stop_running_server(port: int = 8765):
         conn.request("POST", "/api/shutdown")
         res = conn.getresponse()
         if res.status == 200:
-            print(f"🛑 [Rewind] Server on port {port} shut down cleanly.")
+            print(f"[Rewind] Server on port {port} shut down cleanly.")
             return True
     except Exception:
         pass
@@ -87,20 +90,20 @@ def stop_running_server(port: int = 8765):
             for pid in pids:
                 if pid:
                     subprocess.run(["kill", "-9", pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"🛑 [Rewind] Stopped server processes on port {port} (PIDs: {', '.join(pids)}).")
+            print(f"[Rewind] Stopped server processes on port {port} (PIDs: {', '.join(pids)}).")
             return True
     except Exception:
         pass
 
-    print(f"ℹ️ [Rewind] No server was running on port {port}.")
+    print(f"[Rewind] No server was running on port {port}.")
     return False
 
 
 def check_server_status(port: int = 8765):
     if is_port_in_use(port):
-        print(f"🟢 [Rewind] Web Viewer is RUNNING at: http://localhost:{port}")
+        print(f"[Rewind] Web Viewer is RUNNING at: http://localhost:{port}")
     else:
-        print(f"🔴 [Rewind] Web Viewer is STOPPED.")
+        print(f"[Rewind] Web Viewer is STOPPED.")
 
 
 # --------------------------------------------------------------------------
@@ -196,49 +199,72 @@ def apply_patch_to_disk(payload: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Mode 1: Auto Python Script Tracer (with Local Path & SystemExit Handling)
+# Mode 1: Auto Python Script Tracer (Multi-Step Callstack Frame Tracker)
 # --------------------------------------------------------------------------
 def auto_trace_hook(tracer: Tracer):
     last_state = {}
+    frame_steps = {}
 
     def trace_calls(frame, event, arg):
         nonlocal last_state
         filename = frame.f_code.co_filename
-        if "rewind" in filename or filename.startswith("<") or "/lib/python" in filename:
+        
+        # Only ignore Rewind internal files or stdlib
+        if filename.startswith(REWIND_INTERNAL_DIR) or filename.startswith("<") or "/lib/python" in filename or "site-packages" in filename:
             return trace_calls
 
         func_name = frame.f_code.co_name
         line_no = frame.f_lineno
+        frame_id = id(frame)
 
         if event == "call":
+            if func_name in ("<module>", "main"):
+                return trace_calls
             tracer._step_counter += 1
             curr_id = tracer._step_counter
+            step_inputs = dict(frame.f_locals)
+            if tracer.source_code:
+                step_inputs["source_code"] = tracer.source_code
+            if tracer.source_filepath:
+                step_inputs["filepath"] = tracer.source_filepath
+
             step = TraceStep(
                 step_id=curr_id,
-                name=f"call: {func_name}()",
+                name=f"{func_name}()",
                 caller_file=os.path.basename(filename),
                 caller_line=line_no,
-                inputs=serialize_state(frame.f_locals),
+                inputs=serialize_state(step_inputs),
             )
             step.state_before = serialize_state(last_state)
-            frame.f_locals["__rewind_step__"] = step
+            frame_steps[frame_id] = step
 
         elif event == "return":
-            step = frame.f_locals.get("__rewind_step__")
+            step = frame_steps.pop(frame_id, None)
             if step:
                 step.output = serialize_state(arg)
-                step.state_after = serialize_state(frame.f_locals)
+                state_now = dict(last_state)
+                state_now.update(dict(frame.f_locals))
+                if isinstance(arg, dict):
+                    state_now.update(arg)
+                elif arg is not None:
+                    state_now[f"{func_name}_result"] = arg
+                step.state_after = serialize_state(state_now)
                 step.diff = compute_state_diff(step.state_before, step.state_after)
                 step.status = "SUCCESS"
-                last_state = dict(frame.f_locals)
+                last_state = dict(state_now)
                 tracer.steps.append(step)
 
         elif event == "exception":
-            step = frame.f_locals.get("__rewind_step__")
+            step = frame_steps.get(frame_id)
             if step:
                 exc_type, exc_value, _ = arg
                 step.status = "FAILED"
-                step.error = {"type": exc_type.__name__, "message": str(exc_value)}
+                step.error = {
+                    "type": exc_type.__name__,
+                    "message": str(exc_value),
+                    "source_code": tracer.source_code,
+                    "filepath": tracer.source_filepath,
+                }
 
         return trace_calls
 
@@ -248,20 +274,22 @@ def auto_trace_hook(tracer: Tracer):
 def run_python_command(args):
     script_path = os.path.abspath(args.script)
     if not os.path.exists(script_path):
-        print(f"❌ Error: File '{args.script}' not found.")
+        print(f"[Error] File '{args.script}' not found.")
         sys.exit(1)
 
     script_dir = os.path.dirname(script_path)
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
 
-    tracer = get_global_tracer()
-    tracer.title = f"Auto-Trace: {os.path.basename(script_path)}"
-    print(f"⚡ [Rewind] Auto-tracing Python script: {script_path}")
-
     raw_source = ""
     with open(script_path, "r", encoding="utf-8") as f:
         raw_source = f.read()
+
+    tracer = get_global_tracer()
+    tracer.title = f"Auto-Trace: {os.path.basename(script_path)}"
+    tracer.source_code = raw_source
+    tracer.source_filepath = script_path
+    print(f"[Rewind] Auto-tracing Python script: {script_path}")
 
     tee_out = LiveTeeStream(sys.stdout)
     tee_err = LiveTeeStream(sys.stderr)
@@ -277,23 +305,23 @@ def run_python_command(args):
         sys.settrace(None)
         if se.code != 0 and se.code is not None:
             has_error = True
-            print(f"\n💥 [Rewind] Process exited with error code: {se.code}")
+            print(f"\n[Rewind] Process exited with error code: {se.code}")
             step_obj = tracer.record_step_data(
-                name=f"💥 SystemExit: {se.code}",
+                name=f"SystemExit: {se.code}",
                 inputs={"exit_code": se.code, "source_code": raw_source, "filepath": script_path, "stdout": tee_out.getvalue(), "stderr": tee_err.getvalue()},
                 state_updates={"crashed": True, "error_type": "SystemExit", "error_msg": f"Exited with code {se.code}", "stdout": tee_out.getvalue()},
             )
             step_obj.caller_file = os.path.basename(script_path)
             step_obj.status = "FAILED"
-            step_obj.error = {"type": "SystemExit", "message": f"Exit code {se.code}"}
+            step_obj.error = {"type": "SystemExit", "message": f"Exit code {se.code}", "source_code": raw_source, "filepath": script_path}
     except Exception as e:
         sys.settrace(None)
         has_error = True
         tb_str = traceback.format_exc()
-        print(f"\n💥 [Rewind] Caught Fatal Execution Exception: {type(e).__name__}: {e}")
+        print(f"\n[Rewind] Caught Fatal Execution Exception: {type(e).__name__}: {e}")
         
         step_obj = tracer.record_step_data(
-            name=f"💥 Fatal Crash: {type(e).__name__}",
+            name=f"Fatal Crash: {type(e).__name__}",
             inputs={"error": str(e), "source_code": raw_source, "filepath": script_path, "stdout": tee_out.getvalue(), "stderr": tee_err.getvalue()},
             state_updates={"crashed": True, "error_type": type(e).__name__, "error_msg": str(e), "stdout": tee_out.getvalue()},
         )
@@ -323,7 +351,7 @@ def run_python_command(args):
         elapsed = round((time.time() - start_time) * 1000, 2)
         out = args.output or "rewind_trace.json"
         tracer.export(out)
-        print(f"\n✨ [Rewind] Trace saved: {out} ({len(tracer.steps)} steps, {elapsed} ms)")
+        print(f"\n[Rewind] Trace saved: {out} ({len(tracer.steps)} steps, {elapsed} ms)")
         if not args.no_open:
             view_trace(out, port=args.port)
 
@@ -334,12 +362,12 @@ def run_python_command(args):
 def exec_process_command(args):
     cmd = args.command
     if not cmd:
-        print("❌ Error: No command provided to execute.")
+        print("[Error] No command provided to execute.")
         sys.exit(1)
 
     tracer = get_global_tracer()
     tracer.title = f"Process Trace: {' '.join(cmd)}"
-    print(f"⚡ [Rewind] Monitoring process: {' '.join(cmd)}")
+    print(f"[Rewind] Monitoring process: {' '.join(cmd)}")
 
     start_time = time.time()
     try:
@@ -351,7 +379,7 @@ def exec_process_command(args):
             bufsize=1,
         )
     except FileNotFoundError:
-        print(f"❌ [Rewind] Error: Command '{cmd[0]}' not found on your system.")
+        print(f"[Rewind] Error: Command '{cmd[0]}' not found on your system.")
         return
 
     step_id = 0
@@ -377,7 +405,7 @@ def exec_process_command(args):
         stderr_out = process.stderr.read()
         return_code = process.poll()
     except KeyboardInterrupt:
-        print("\n🛑 [Rewind] Process stopped by user (SIGINT).")
+        print("\n[Rewind] Process stopped by user (SIGINT).")
         process.terminate()
         return_code = 130
 
@@ -403,7 +431,7 @@ def exec_process_command(args):
 
         step_id += 1
         step_obj = tracer.record_step_data(
-            name=f"💥 Crash: {err_type}",
+            name=f"Crash: {err_type}",
             inputs={"stderr": stderr_out.strip(), "exit_code": return_code, "stdout": "".join(full_stdout)},
             state_updates={"has_error": True, "error_type": err_type, "error_output": stderr_out.strip()},
         )
@@ -416,7 +444,7 @@ def exec_process_command(args):
 
     out = args.output or "rewind_trace.json"
     tracer.export(out)
-    print(f"\n✨ [Rewind] Process exited with code {return_code}. Trace saved to: {out}")
+    print(f"\n[Rewind] Process exited with code {return_code}. Trace saved to: {out}")
     if not args.no_open:
         view_trace(out, port=args.port)
 
@@ -436,7 +464,7 @@ def view_trace(trace_path: str = "rewind_trace.json", port: int = 8765):
 
     active_port = find_free_port(port)
     if active_port != port:
-        print(f"ℹ️ [Rewind] Port {port} was busy. Using available port {active_port} instead.")
+        print(f"[Rewind] Port {port} was busy. Using available port {active_port} instead.")
 
     class ManagedHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -458,7 +486,7 @@ def view_trace(trace_path: str = "rewind_trace.json", port: int = 8765):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(b'{"status":"shutting_down"}')
-                print("\n🛑 [Rewind] Received shutdown command from browser.")
+                print("\n[Rewind] Received shutdown command from browser.")
                 threading.Thread(target=lambda: (time.sleep(0.3), server.shutdown())).start()
                 return
 
@@ -487,8 +515,8 @@ def view_trace(trace_path: str = "rewind_trace.json", port: int = 8765):
     url = f"http://localhost:{active_port}"
 
     print("=" * 55)
-    print(f"🚀 [Rewind] Web Scrubber active at: {url}")
-    print(f"💡 Press Ctrl+C in terminal or click '🛑 Stop' in UI to turn off.")
+    print(f"[Rewind] Web Scrubber active at: {url}")
+    print(f"Press Ctrl+C in terminal or click 'Stop Server' in UI to turn off.")
     print("=" * 55)
 
     threading.Thread(target=lambda: (time.sleep(0.4), webbrowser.open(url)), daemon=True).start()
@@ -499,7 +527,7 @@ def view_trace(trace_path: str = "rewind_trace.json", port: int = 8765):
         pass
     finally:
         server.server_close()
-        print("\n👋 [Rewind] Web server closed successfully.")
+        print("\n[Rewind] Web server closed successfully.")
 
 
 # --------------------------------------------------------------------------

@@ -59,6 +59,8 @@ class TraceStep:
 class Tracer:
     def __init__(self, title: str = "Rewind Execution Trace"):
         self.title = title
+        self.source_code = ""
+        self.source_filepath = ""
         self.lock = threading.RLock()
         self.steps: List[TraceStep] = []
         self.state: Dict[str, Any] = {}
@@ -75,12 +77,18 @@ class Tracer:
         """Manually records a single atomic step data record."""
         with self.lock:
             self._step_counter += 1
+            step_inputs = dict(inputs or {})
+            if self.source_code and "source_code" not in step_inputs:
+                step_inputs["source_code"] = self.source_code
+            if self.source_filepath and "filepath" not in step_inputs:
+                step_inputs["filepath"] = self.source_filepath
+
             step_obj = TraceStep(
                 step_id=self._step_counter,
                 name=name,
-                caller_file="cli_runner",
+                caller_file=os.path.basename(self.source_filepath) if self.source_filepath else "cli_runner",
                 caller_line=0,
-                inputs=serialize_state(inputs or {}),
+                inputs=serialize_state(step_inputs),
             )
             step_obj.state_before = serialize_state(self.state)
             if state_updates:
@@ -102,12 +110,18 @@ class Tracer:
             caller_file = os.path.basename(caller_frame.f_code.co_filename) if caller_frame else "unknown"
             caller_line = caller_frame.f_lineno if caller_frame else 0
 
+            step_inputs = dict(metadata)
+            if self.source_code and "source_code" not in step_inputs:
+                step_inputs["source_code"] = self.source_code
+            if self.source_filepath and "filepath" not in step_inputs:
+                step_inputs["filepath"] = self.source_filepath
+
             step_obj = TraceStep(
                 step_id=curr_id,
                 name=name,
                 caller_file=caller_file,
                 caller_line=caller_line,
-                inputs=serialize_state(metadata),
+                inputs=serialize_state(step_inputs),
             )
             step_obj.state_before = serialize_state(self.state)
 
@@ -124,6 +138,8 @@ class Tracer:
                     "type": type(e).__name__,
                     "message": str(e),
                     "traceback": traceback.format_exc(),
+                    "source_code": self.source_code,
+                    "filepath": self.source_filepath,
                 }
             raise
         finally:
@@ -143,6 +159,8 @@ class Tracer:
             return {
                 "schema_version": "1.0.0",
                 "title": self.title,
+                "source_code": self.source_code,
+                "source_filepath": self.source_filepath,
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "has_crash": has_error,
                 "total_steps": len(self.steps),
