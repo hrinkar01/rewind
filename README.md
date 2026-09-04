@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⏪ Rewind
+# Rewind
 
 ### **Deterministic Time-Travel Debugger & Live Hot-Code Patcher**
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 💡 The Problem Rewind Solves
+## The Problem Rewind Solves
 
 When a software pipeline, server, or script crashes, standard debuggers and terminals only show **The Point of Death**:
 
@@ -30,15 +30,15 @@ File "billing_engine.py", line 84, in calculate_final_invoice
 ```
 
 A standard terminal tells you that line 84 crashed because `tax_exempt` was `None`. **It cannot answer:**
-* ❓ **WHO** mutated `tax_exempt` to `None`?
-* ❓ **WHEN** was it changed? *(Step 2, Step 6, or a helper function called 15 minutes ago?)*
-* ❓ **WHAT** did the program memory look like 3 steps *before* the crash?
+* **WHO** mutated `tax_exempt` to `None`?
+* **WHEN** was it changed? *(Step 2, Step 6, or a helper function called 15 minutes ago?)*
+* **WHAT** did the program memory look like 3 steps *before* the crash?
 
 Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repetitive loop of adding `print()` statements and restarting from scratch.
 
 ---
 
-## ⚡ The Solution: Deterministic Time-Travel Execution
+## The Solution: Deterministic Time-Travel Execution
 
 > [!IMPORTANT]
 > **Rewind provides complete runtime state observability for your software.** Run your program once. If it crashes, open the visual cockpit, drag the timeline backward in time to inspect the exact memory state at each step, test a multi-line fix in memory in **0.5 ms**, and apply it directly to disk with 1 click.
@@ -52,21 +52,21 @@ Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repeti
 
 ---
 
-## ✨ Core Features
+## Core Features
 
 | Capability | What It Does | Performance |
 | :--- | :--- | :--- |
-| ⏪ **Time-Travel Recording** | Captures before/after memory snapshots across transitions | Microsecond timing |
-| ⚡ **Sub-Microsecond Diffing** | Recursive $O(N)$ state comparator detecting `+` added, `~` mutated, and `-` removed keys | **$< 0.001$ seconds** |
-| 📝 **Hot-Code Sandbox** | In-memory code patcher to test logic without restarting processes or resetting databases | **0.5 ms latency** |
-| 💾 **1-Click Disk Patcher** | Writes verified fixes directly to local source files with recursive file discovery & backups | Instant |
-| 🌐 **Universal Process Runner** | Traces Python scripts and monitors **Next.js, Node, Go, Rust, C++, and Docker** processes | Live I/O stream |
-| 🚨 **Root-Cause Diagnostics** | Automated heuristic analyzer detecting poisoned variables and unclosed syntax errors | Instant |
-| 📦 **Zero External Dependencies** | Built 100% on Python standard libraries and vanilla web technologies | Pure Stdlib |
+| **Time-Travel Recording** | Captures before/after memory snapshots across transitions | Microsecond timing |
+| **Sub-Microsecond Diffing** | Recursive $O(N)$ state comparator detecting `+` added, `~` mutated, and `-` removed keys | **$< 0.001$ seconds** |
+| **Hot-Code Sandbox** | In-memory code patcher to test logic without restarting processes or resetting databases | **0.5 ms latency** |
+| **1-Click Disk Patcher** | Writes verified fixes directly to local source files with recursive file discovery & backups | Instant |
+| **Universal Process Runner** | Traces Python scripts and monitors **Next.js, Node, Go, Rust, C++, and Docker** processes | Live I/O stream |
+| **Root-Cause Diagnostics** | Automated heuristic analyzer detecting poisoned variables and unclosed syntax errors | Instant |
+| **Zero External Dependencies** | Built 100% on Python standard libraries and vanilla web technologies | Pure Stdlib |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -96,7 +96,7 @@ flowchart LR
 
 ---
 
-## 🚀 Quickstart
+## Quickstart
 
 ### 1. Installation
 
@@ -115,7 +115,7 @@ pip3 install -e .
 Trace any Python script with **zero code modifications**:
 
 ```bash
-rewind run tests/helloWorld.py
+rewind run tests/broken_pipeline.py
 ```
 
 * Intercepts `stdout`/`stderr` live in the console.
@@ -166,7 +166,7 @@ rewind stop
 
 ---
 
-## 🎮 Programmatic Python SDK
+## Programmatic Python SDK
 
 You can also instrument critical sections of your Python applications directly:
 
@@ -191,11 +191,11 @@ tracer.export("rewind_trace.json")
 
 ---
 
-## 🛠️ CLI Reference
+## CLI Reference
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
-| **`rewind run <script.py>`** | Auto-traces a Python script with zero code changes | `rewind run pipeline.py` |
+| **`rewind run <script.py>`** | Auto-traces a Python script with zero code changes | `rewind run tests/broken_pipeline.py` |
 | **`rewind exec <cmd...>`** | Traces any CLI process/server and captures stdout/stderr | `rewind exec npm run dev` |
 | **`rewind view [trace.json]`** | Launches the interactive web dashboard | `rewind view` |
 | **`rewind status`** | Checks if the web dashboard server is active | `rewind status` |
@@ -203,7 +203,7 @@ tracer.export("rewind_trace.json")
 
 ---
 
-## 🧪 Unit Test Suite
+## Unit Test Suite
 
 ```bash
 python3 -m unittest discover -s tests -p "test_*.py" -v
@@ -232,7 +232,7 @@ OK
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to open an issue or submit a pull request:
 
@@ -244,10 +244,10 @@ Contributions are welcome! Please feel free to open an issue or submit a pull re
 
 ---
 
-## 📄 License
+## License
 
 Distributed under the **MIT License**. See `LICENSE` for details.
 
 <div align="center">
-  <sub>Built with ⏪ by <a href="https://github.com/hrinkar01">Hrinkar Bothra</a>.</sub>
+  <sub>Built by <a href="https://github.com/hrinkar01">Hrinkar Bothra</a>.</sub>
 </div>
