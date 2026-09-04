@@ -40,3 +40,8 @@ venv.bak/
 # IDE files
 .vscode/
 .idea/
+
+# Rewind Trace Runtime Artifacts
+*rewind_trace.json
+rewind_trace.json
+viewer/rewind_trace.json
