@@ -1,5 +1,5 @@
 /**
- * Rewind ⏪ Interactive Time-Travel Debugger Engine (Universal Live Trace & Hot-Code Sandbox)
+ * Rewind Interactive Time-Travel Debugger Engine (Universal Live Trace & Hot-Code Sandbox)
  */
 
 // App State
@@ -102,11 +102,11 @@ function loadTraceData(data) {
   const hasCrash = data.has_crash || data.steps.some(s => s.status === "FAILED" || s.error);
   if (hasCrash) {
     crashBadge.className = "summary-badge has-crash";
-    crashStatusText.textContent = "💥 Crash Detected";
+    crashStatusText.textContent = "Crash Detected";
     jumpCrashBtn.style.display = "inline-block";
   } else {
     crashBadge.className = "summary-badge";
-    crashStatusText.textContent = "✅ Clean Execution";
+    crashStatusText.textContent = "Clean Execution";
     jumpCrashBtn.style.display = "none";
   }
 
@@ -132,7 +132,7 @@ function loadTraceData(data) {
     card.innerHTML = `
       <div class="step-card-header">
         <span>#${step.step_id || idx + 1}</span>
-        <span>${step.duration_us || 0} μs</span>
+        <span>${step.duration_us || 0} us</span>
       </div>
       <div class="step-name">${step.name}</div>
     `;
@@ -173,44 +173,57 @@ function setStep(index) {
     tick.classList.toggle("active", idx === index);
   });
 
-  // Populate Sandbox Editor with real script code
-  const filename = step.caller_file || "tests/helloWorld.py";
-  sandboxStepLabel.textContent = filename;
+  // Determine Real Source Code
+  const rawCode =
+    currentTrace.source_code ||
+    step.error?.source_code ||
+    step.inputs?.source_code ||
+    (currentTrace.steps.find(s => s.error?.source_code || s.inputs?.source_code))?.error?.source_code ||
+    (currentTrace.steps.find(s => s.inputs?.source_code))?.inputs?.source_code;
 
-  if (step.error?.source_code || step.inputs?.source_code) {
-    sandboxCodeEditor.value = step.error?.source_code || step.inputs?.source_code;
-  } else if (filename.includes("helloWorld")) {
+  const targetFile =
+    currentTrace.source_filepath ||
+    step.error?.filepath ||
+    step.inputs?.filepath ||
+    step.caller_file ||
+    "script.py";
+
+  sandboxStepLabel.textContent = targetFile.split("/").pop();
+
+  if (rawCode) {
+    sandboxCodeEditor.value = rawCode;
+  } else if (targetFile.includes("helloWorld")) {
     sandboxCodeEditor.value = `print("Hello World!")\nprint("hello")`;
   } else {
-    sandboxCodeEditor.value = `# Source code for ${filename}\nprint("Fixed logic")`;
+    sandboxCodeEditor.value = `# Source code for ${targetFile}\n`;
   }
 
   // Check for crash at this step
   if (step.status === "FAILED" || step.error) {
     heroCrashBanner.style.display = "flex";
     bannerLocation.textContent = `${step.caller_file || "script.py"}:L${step.caller_line || 1}`;
-    bannerErrorType.textContent = `💥 ${step.error?.type || "Fatal Execution Crash"}`;
+    bannerErrorType.textContent = `${step.error?.type || "Fatal Execution Crash"}`;
     bannerErrorMsg.textContent = step.error?.message || "An unhandled exception caused this step to fail.";
 
     const errMsg = (step.error?.message || "") + " " + (step.error?.traceback || "");
     let rootHint = "";
 
     if (errMsg.includes("SyntaxError") || errMsg.includes("unterminated string") || errMsg.includes("never closed")) {
-      rootHint = `🕵️ <b>Root Cause Analysis:</b> Syntax error in code (unclosed quote, bracket, or misplaced character).<br>👉 <b>Fix:</b> Edit line directly in the <b>⚡ Hot-Code Sandbox</b> tab below, test in memory & apply to disk!`;
+      rootHint = `<b>Root Cause Analysis:</b> Syntax error in code (unclosed quote, bracket, or misplaced character).<br><b>Fix:</b> Edit line directly in the <b>Hot-Code Sandbox</b> tab below, test in memory and apply to disk.`;
     } else if (errMsg.includes("No module named")) {
       const match = errMsg.match(/No module named ['"]([^'"]+)['"]/);
       const pkg = match ? match[1] : "module";
-      rootHint = `🕵️ <b>Root Cause Analysis:</b> Missing Python dependency <code>${pkg}</code>.<br>👉 <b>Fix:</b> Run <code>pip install ${pkg}</code> in your terminal.`;
+      rootHint = `<b>Root Cause Analysis:</b> Missing Python dependency <code>${pkg}</code>.<br><b>Fix:</b> Run <code>pip install ${pkg}</code> in your terminal.`;
     } else if (errMsg.includes("Missing script")) {
-      rootHint = "🕵️ <b>Root Cause Analysis:</b> npm script is missing in <code>package.json</code>.<br>👉 <b>Fix:</b> Use <code>npm start</code> instead of <code>npm run dev</code>.";
+      rootHint = "<b>Root Cause Analysis:</b> npm script is missing in <code>package.json</code>.<br><b>Fix:</b> Use <code>npm start</code> instead of <code>npm run dev</code>.";
     } else if (errMsg.includes("KeyError")) {
-      rootHint = `🕵️ <b>Root Cause Analysis:</b> Dictionary key was accessed before being initialized.`;
+      rootHint = `<b>Root Cause Analysis:</b> Dictionary key was accessed before being initialized.`;
     }
 
     rootCauseHint.innerHTML = rootHint;
     rootCauseHint.style.display = rootHint ? "block" : "none";
 
-    diagStatus.innerHTML = '<span class="status-pill status-failed">FAILED 💥</span>';
+    diagStatus.innerHTML = '<span class="status-pill status-failed">FAILED</span>';
     crashBox.style.display = "flex";
     crashTrace.textContent = step.error?.traceback || step.error?.message || "No stack trace available.";
   } else {
@@ -235,7 +248,7 @@ function setStep(index) {
 
   // Diagnostics
   diagLocation.textContent = `${step.caller_file || "script.py"}:L${step.caller_line || 1}`;
-  diagDuration.textContent = `${step.duration_us || 0} μs`;
+  diagDuration.textContent = `${step.duration_us || 0} us`;
 }
 
 function renderDiffs(diffs) {
@@ -272,10 +285,10 @@ function togglePlayPause() {
   if (isPlaying) {
     clearInterval(playInterval);
     isPlaying = false;
-    playPauseBtn.textContent = "▶ Play";
+    playPauseBtn.textContent = "Play";
   } else {
     isPlaying = true;
-    playPauseBtn.textContent = "⏸ Pause";
+    playPauseBtn.textContent = "Pause";
 
     playInterval = setInterval(() => {
       if (currentStepIndex < currentTrace.steps.length - 1) {
@@ -321,13 +334,60 @@ function setupEventListeners() {
     });
   });
 
+  // Hot-Code Sandbox: Interactive Drag Resizer
+  const editorResizer = document.getElementById("editorResizer");
+  if (editorResizer) {
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    editorResizer.addEventListener("mousedown", (e) => {
+      isResizing = true;
+      startY = e.clientY;
+      startHeight = sandboxCodeEditor.getBoundingClientRect().height;
+      document.body.classList.add("is-resizing");
+      e.preventDefault();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isResizing) return;
+      const deltaY = e.clientY - startY;
+      const newHeight = Math.max(140, Math.min(window.innerHeight * 0.85, startHeight + deltaY));
+      sandboxCodeEditor.style.height = `${newHeight}px`;
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.classList.remove("is-resizing");
+      }
+    });
+  }
+
+  // Hot-Code Sandbox: Tab Key Indentation (4 spaces)
+  sandboxCodeEditor.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const start = sandboxCodeEditor.selectionStart;
+      const end = sandboxCodeEditor.selectionEnd;
+      const val = sandboxCodeEditor.value;
+      sandboxCodeEditor.value = val.substring(0, start) + "    " + val.substring(end);
+      sandboxCodeEditor.selectionStart = sandboxCodeEditor.selectionEnd = start + 4;
+    }
+  });
+
   // Hot-Code Sandbox: Test & Replay in Memory
   replaySandboxBtn.addEventListener("click", async () => {
     const code = sandboxCodeEditor.value;
     const step = currentTrace.steps[currentStepIndex];
-    const fullPath = step.error?.filepath || step.inputs?.filepath || step.caller_file || "tests/helloWorld.py";
+    const fullPath =
+      currentTrace.source_filepath ||
+      step.error?.filepath ||
+      step.inputs?.filepath ||
+      step.caller_file ||
+      "tests/broken_pipeline.py";
 
-    replaySandboxBtn.textContent = "⚙️ Replaying in Sandbox...";
+    replaySandboxBtn.textContent = "Replaying in Sandbox...";
 
     try {
       const res = await fetch("/api/replay", {
@@ -340,20 +400,20 @@ function setupEventListeners() {
       });
 
       const result = await res.json();
-      replaySandboxBtn.textContent = "⚡ Test & Hot-Replay in Sandbox";
+      replaySandboxBtn.textContent = "Test & Hot-Replay in Sandbox";
 
       if (result.success && !result.has_crash) {
         lastSuccessfulReplayCode = code;
 
         replayOutcomeCard.style.display = "flex";
-        outcomeBadge.textContent = "✅ Live Sandbox Replay PASSED!";
+        outcomeBadge.textContent = "Live Sandbox Replay PASSED";
         outcomeBadge.style.color = "var(--accent-green)";
         outcomeTiming.textContent = `Executed in ${result.timing_ms || 0.5} ms`;
-        outcomeMsg.textContent = result.message || "Script executed without errors!";
+        outcomeMsg.textContent = result.message || "Script executed without errors.";
 
         // Show Disk Patch and Diff Buttons
         applyPatchBtn.style.display = "inline-block";
-        applyPatchBtn.textContent = `💾 Save Fix to Local File (${step.caller_file || "helloWorld.py"})`;
+        applyPatchBtn.textContent = `Save Fix to Local File (${fullPath.split("/").pop()})`;
         copyDiffBtn.style.display = "inline-block";
 
         // Update logs viewer
@@ -362,12 +422,12 @@ function setupEventListeners() {
         }
       } else {
         replayOutcomeCard.style.display = "flex";
-        outcomeBadge.textContent = "💥 Replay Failed";
+        outcomeBadge.textContent = "Replay Failed";
         outcomeBadge.style.color = "var(--accent-rose)";
         outcomeMsg.textContent = result.error || "The modified code still caused an exception.";
       }
     } catch (err) {
-      replaySandboxBtn.textContent = "⚡ Test & Hot-Replay in Sandbox";
+      replaySandboxBtn.textContent = "Test & Hot-Replay in Sandbox";
       alert("Error connecting to replay server: " + err.message);
     }
   });
@@ -375,7 +435,12 @@ function setupEventListeners() {
   // Apply Patch to Local File on Disk
   applyPatchBtn.addEventListener("click", async () => {
     const step = currentTrace.steps[currentStepIndex];
-    const fullPath = step.error?.filepath || step.inputs?.filepath || step.caller_file || "tests/helloWorld.py";
+    const fullPath =
+      currentTrace.source_filepath ||
+      step.error?.filepath ||
+      step.inputs?.filepath ||
+      step.caller_file ||
+      "tests/broken_pipeline.py";
     const codeToSave = lastSuccessfulReplayCode || sandboxCodeEditor.value;
 
     try {
@@ -390,11 +455,11 @@ function setupEventListeners() {
 
       const data = await res.json();
       if (data.success) {
-        alert("🎉 " + data.message);
-        applyPatchBtn.textContent = "✅ Saved to Disk!";
+        alert(data.message);
+        applyPatchBtn.textContent = "Saved to Disk";
         applyPatchBtn.style.background = "#059669";
       } else {
-        alert("❌ Error: " + data.error);
+        alert("Error: " + data.error);
       }
     } catch (err) {
       alert("Failed to patch file on disk: " + err.message);
@@ -404,11 +469,11 @@ function setupEventListeners() {
   // Copy Git Diff Button
   copyDiffBtn.addEventListener("click", () => {
     const step = currentTrace.steps[currentStepIndex];
-    const filename = step.caller_file || "tests/helloWorld.py";
-    const diffText = `--- a/${filename}\n+++ b/${filename}\n@@ -1,2 +1,2 @@\n-print(#"hello")\n+print("hello")\n`;
+    const filename = currentTrace.source_filepath || step.caller_file || "script.py";
+    const diffText = `--- a/${filename.split("/").pop()}\n+++ b/${filename.split("/").pop()}\n@@ -1 +1 @@\n`;
     navigator.clipboard.writeText(diffText);
-    copyDiffBtn.textContent = "✅ Diff Copied!";
-    setTimeout(() => { copyDiffBtn.textContent = "📋 Copy Git Diff"; }, 2000);
+    copyDiffBtn.textContent = "Diff Copied";
+    setTimeout(() => { copyDiffBtn.textContent = "Copy Git Diff"; }, 2000);
   });
 
   // Keyboard Navigation
@@ -449,7 +514,7 @@ function setupEventListeners() {
         } catch (e) {}
         document.body.innerHTML = `
           <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#07090e; color:#94a3b8; text-align:center;">
-            <h1 style="color:#f8fafc; font-size:24px; margin-bottom:8px;">🛑 Rewind Server Stopped</h1>
+            <h1 style="color:#f8fafc; font-size:24px; margin-bottom:8px;">Rewind Server Stopped</h1>
             <p style="font-size:14px; margin-bottom:16px;">The local web server has been shut down cleanly.</p>
             <span style="font-size:12px; color:#64748b;">You can safely close this browser tab.</span>
           </div>

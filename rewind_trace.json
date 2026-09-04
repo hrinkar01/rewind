@@ -1,48 +1,12 @@
 {
   "schema_version": "1.0.0",
-  "title": "Auto-Trace: helloWorld.py",
-  "created_at": "2026-08-28 18:46:00",
+  "title": "Auto-Trace: broken_pipeline.py",
+  "source_code": "\"\"\"\nSample Multi-Step Script with a Runtime Bug for Testing Rewind.\n\nRun this with:\n    rewind run tests/broken_pipeline.py\n\"\"\"\n\ndef initialize_session(user_name):\n    print(f\"[Step 1] Initializing order checkout session for {user_name}...\")\n    return {\n        \"order_id\": \"ORD-94821\",\n        \"customer\": user_name,\n        \"items\": [\"Mechanical Keyboard\", \"USB-C Cable\"],\n        \"subtotal\": 120.00,\n        \"discount\": 20.00,\n        \"tax\": None,  # Bug: tax was initialized to None instead of a numeric value!\n        \"status\": \"INITIALIZED\",\n    }\n\n\ndef apply_discount(order):\n    print(\"[Step 2] Applying promotional coupon discount...\")\n    order[\"discounted_subtotal\"] = order[\"subtotal\"] - order[\"discount\"]\n    order[\"status\"] = \"DISCOUNT_APPLIED\"\n    return order\n\n\ndef calculate_shipping(order):\n    print(\"[Step 3] Calculating express shipping fee...\")\n    order[\"shipping_fee\"] = 15.00\n    order[\"status\"] = \"SHIPPING_CALCULATED\"\n    return order\n\n\ndef finalize_invoice(order):\n    print(\"[Step 4] Finalizing total ledger invoice including tax...\")\n    # Crash occurs here: Adding float and NoneType raises TypeError!\n    final_total = order[\"discounted_subtotal\"] + order[\"shipping_fee\"] + order[\"tax\"]\n    order[\"final_total\"] = final_total\n    order[\"status\"] = \"COMPLETED\"\n    print(f\"[Step 5] Order finalized successfully! Total: ${final_total:.2f}\")\n    return order\n\n\ndef main():\n    order = initialize_session(\"Alice\")\n    order = apply_discount(order)\n    order = calculate_shipping(order)\n    order = finalize_invoice(order)\n    return order\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "source_filepath": "/Users/hrinkar/Documents/projects/rewind/tests/broken_pipeline.py",
+  "created_at": "2026-09-04 22:30:25",
   "has_crash": false,
-  "total_steps": 1,
-  "total_duration_ms": 20.33,
-  "final_state": {
-    "stdout": "Hello World!\nhello\n",
-    "status": "COMPLETED"
-  },
-  "steps": [
-    {
-      "step_id": 1,
-      "name": "exec: helloWorld.py",
-      "caller_file": "helloWorld.py",
-      "caller_line": 0,
-      "inputs": {
-        "stdout": "Hello World!\nhello\n",
-        "stderr": "",
-        "source_code": "print(\"Hello World!\")\nprint(\"hello\") ",
-        "filepath": "/Users/hrinkar/Documents/projects/rewind/tests/helloWorld.py"
-      },
-      "output": null,
-      "state_before": {},
-      "state_after": {
-        "stdout": "Hello World!\nhello\n",
-        "status": "COMPLETED"
-      },
-      "diff": [
-        {
-          "type": "added",
-          "path": "status",
-          "value": "COMPLETED"
-        },
-        {
-          "type": "added",
-          "path": "stdout",
-          "value": "Hello World!\nhello\n"
-        }
-      ],
-      "duration_us": 0.0,
-      "timestamp": 1787922960.3433201,
-      "status": "SUCCESS",
-      "error": null
-    }
-  ]
+  "total_steps": 0,
+  "total_duration_ms": 2.12,
+  "final_state": {},
+  "steps": []
 }

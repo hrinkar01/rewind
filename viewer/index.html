@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rewind ⏪ Deterministic Time-Travel Debugger</title>
+    <title>Rewind - Deterministic Time-Travel Debugger</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -16,7 +16,7 @@
     <!-- Header -->
     <header class="app-header">
         <div class="logo-group">
-            <div class="logo-icon">⏪</div>
+            <div class="logo-icon font-mono font-bold" style="color: var(--accent-purple); font-size: 18px;">[RW]</div>
             <div>
                 <h1 class="logo-title">Rewind</h1>
                 <span class="logo-subtitle">Deterministic Time-Travel Debugger</span>
@@ -40,8 +40,8 @@
 
         <div class="header-actions">
             <input type="file" id="traceFileInput" accept=".json" style="display: none;">
-            <button class="btn btn-secondary" id="loadTraceBtn">📂 Load Trace</button>
-            <button class="btn btn-secondary crash-btn" id="stopServerBtn" title="Cleanly shutdown web server">🛑 Stop Server</button>
+            <button class="btn btn-secondary" id="loadTraceBtn">Load Trace</button>
+            <button class="btn btn-secondary crash-btn" id="stopServerBtn" title="Cleanly shutdown web server">Stop Server</button>
         </div>
     </header>
 
@@ -54,12 +54,12 @@
             </div>
 
             <div class="playback-controls">
-                <button class="ctrl-btn" id="firstStepBtn" title="First Step (Home)">⏮</button>
-                <button class="ctrl-btn" id="prevStepBtn" title="Step Back (Left Arrow)">◀</button>
-                <button class="ctrl-btn play-btn" id="playPauseBtn" title="Play/Pause (Space)">▶ Play</button>
-                <button class="ctrl-btn" id="nextStepBtn" title="Step Forward (Right Arrow)">▶</button>
-                <button class="ctrl-btn" id="lastStepBtn" title="Last Step (End)">⏭</button>
-                <button class="ctrl-btn crash-btn" id="jumpCrashBtn" title="Jump to Crash" style="display: none;">🚨 Jump to Crash</button>
+                <button class="ctrl-btn" id="firstStepBtn" title="First Step (Home)">|&lt;</button>
+                <button class="ctrl-btn" id="prevStepBtn" title="Step Back (Left Arrow)">&lt;</button>
+                <button class="ctrl-btn play-btn" id="playPauseBtn" title="Play/Pause (Space)">Play</button>
+                <button class="ctrl-btn" id="nextStepBtn" title="Step Forward (Right Arrow)">&gt;</button>
+                <button class="ctrl-btn" id="lastStepBtn" title="Last Step (End)">&gt;|</button>
+                <button class="ctrl-btn crash-btn" id="jumpCrashBtn" title="Jump to Crash" style="display: none;">Jump to Crash</button>
             </div>
         </div>
 
@@ -75,7 +75,7 @@
         <!-- Col 1: Step Feed -->
         <aside class="panel step-feed-panel">
             <div class="panel-header">
-                <span class="panel-title">📜 Step Timeline</span>
+                <span class="panel-title">Step Timeline</span>
                 <span class="panel-count" id="stepFeedCount">0 steps</span>
             </div>
             <div class="step-feed-list" id="stepFeedList"></div>
@@ -86,7 +86,7 @@
             <!-- Hero Crash Banner -->
             <div class="hero-crash-banner" id="heroCrashBanner" style="display: none;">
                 <div class="crash-banner-header">
-                    <span class="crash-badge-pill">💥 CRASH DETECTED AT THIS STEP</span>
+                    <span class="crash-badge-pill">CRASH DETECTED AT THIS STEP</span>
                     <span class="crash-location-pill" id="bannerLocation">script.py:L1</span>
                 </div>
                 <h3 class="crash-banner-title" id="bannerErrorType">TypeError</h3>
@@ -97,10 +97,10 @@
             <!-- Clean Single Unified Tab Bar -->
             <div class="panel-header">
                 <div class="tab-group">
-                    <button class="tab-btn highlight-tab active" data-tab="sandbox">⚡ Hot-Code Sandbox</button>
-                    <button class="tab-btn" data-tab="diff">⚡ State Diff</button>
-                    <button class="tab-btn" data-tab="snapshot">📦 Full Snapshot</button>
-                    <button class="tab-btn" data-tab="logs">🖥️ Output / Logs</button>
+                    <button class="tab-btn highlight-tab active" data-tab="sandbox">Hot-Code Sandbox</button>
+                    <button class="tab-btn" data-tab="diff">State Diff</button>
+                    <button class="tab-btn" data-tab="snapshot">Full Snapshot</button>
+                    <button class="tab-btn" data-tab="logs">Output / Logs</button>
                 </div>
             </div>
 
@@ -108,32 +108,39 @@
             <div class="tab-pane active" id="tab-sandbox">
                 <div class="sandbox-header">
                     <div>
-                        <h4 class="sandbox-title">⚡ Live Code Patcher</h4>
-                        <span class="sandbox-desc">Edit Python logic directly. Test in memory & apply to disk!</span>
+                        <h4 class="sandbox-title">Live Code Patcher</h4>
+                        <span class="sandbox-desc">Edit Python logic directly. Test in memory and apply to disk.</span>
                     </div>
                 </div>
 
                 <div class="editor-wrapper">
                     <div class="editor-label-bar">
-                        <span>🐍 Python Source Code</span>
-                        <span class="font-mono text-muted" id="sandboxStepLabel">script.py</span>
+                        <div class="flex items-center gap-2">
+                            <span>Python Source Code:</span>
+                            <span class="font-mono text-muted" id="sandboxStepLabel">script.py</span>
+                        </div>
                     </div>
                     <textarea class="code-editor" id="sandboxCodeEditor" spellcheck="false" placeholder="Write or fix Python code here..."></textarea>
+                    
+                    <!-- Sleek Interactive Drag Resizer Handle -->
+                    <div class="editor-resizer" id="editorResizer" title="Drag to resize code box">
+                        <div class="resizer-grip-line"></div>
+                    </div>
                 </div>
 
                 <div class="sandbox-action-bar">
-                    <button class="btn btn-purple" id="replaySandboxBtn">⚡ Test & Hot-Replay in Sandbox</button>
-                    <button class="btn btn-green" id="applyPatchBtn" style="display: none;">💾 Save Fix to Local File</button>
-                    <button class="btn btn-secondary" id="copyDiffBtn" style="display: none;">📋 Copy Git Diff</button>
+                    <button class="btn btn-purple" id="replaySandboxBtn">Test & Hot-Replay in Sandbox</button>
+                    <button class="btn btn-green" id="applyPatchBtn" style="display: none;">Save Fix to Local File</button>
+                    <button class="btn btn-secondary" id="copyDiffBtn" style="display: none;">Copy Git Diff</button>
                 </div>
 
                 <!-- Live Replay Outcome Banner -->
                 <div class="replay-outcome-card" id="replayOutcomeCard" style="display: none;">
                     <div class="outcome-header">
-                        <span class="outcome-badge" id="outcomeBadge">✅ Replay Succeeded</span>
+                        <span class="outcome-badge" id="outcomeBadge">Replay Succeeded</span>
                         <span class="outcome-timing" id="outcomeTiming">Replayed in 0.5 ms</span>
                     </div>
-                    <p class="outcome-msg" id="outcomeMsg">Script executed cleanly with zero errors!</p>
+                    <p class="outcome-msg" id="outcomeMsg">Script executed cleanly with zero errors.</p>
                 </div>
             </div>
 
@@ -161,7 +168,7 @@
         <!-- Col 3: Diagnostics & Crash Details -->
         <aside class="panel diagnostics-panel">
             <div class="panel-header">
-                <span class="panel-title">🔬 Step Diagnostics</span>
+                <span class="panel-title">Step Diagnostics</span>
             </div>
 
             <div class="diag-card">
@@ -171,7 +178,7 @@
 
             <div class="diag-card">
                 <span class="diag-label">Execution Duration</span>
-                <div class="diag-value font-mono" id="diagDuration">0 μs</div>
+                <div class="diag-value font-mono" id="diagDuration">0 us</div>
             </div>
 
             <div class="diag-card">
@@ -184,7 +191,6 @@
             <!-- Detailed Stacktrace Box -->
             <div class="crash-box" id="crashBox" style="display: none;">
                 <div class="crash-header">
-                    <span class="crash-icon">💥</span>
                     <span class="crash-type" id="crashType">Exception Traceback</span>
                 </div>
                 <pre class="crash-trace" id="crashTrace"></pre>
