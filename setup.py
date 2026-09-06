@@ -7,6 +7,7 @@ setup(
     entry_points={
         "console_scripts": [
             "rewind=rewind.cli:main",
+            "rewind-debug=rewind.cli:main",
         ],
     },
 )
