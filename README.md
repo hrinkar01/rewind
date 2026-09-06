@@ -2,12 +2,13 @@
 
 # Rewind
 
-### **Deterministic Time-Travel Debugger & Live Hot-Code Patcher**
+### **Universal Time-Travel Debugger & Live In-Browser Hot-Patcher**
 
-*Automated Runtime State Inspection, Sub-Microsecond State Diffing, and In-Memory Hot-Patching for Developers.*
+*Automated Runtime State Inspection, Sub-Microsecond Circular State Diffing, and Zero-Dependency In-Memory Hot-Patching.*
 
 <br/>
 
+[![PyPI Version](https://img.shields.io/pypi/v/rewind-debug?color=3776AB&style=flat-square&logo=pypi&logoColor=white)](https://pypi.org/project/rewind-debug/)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-13%2F13%20Passed-2ea44f?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/hrinkar01/rewind)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-ff6a3d?style=flat-square)](https://github.com/hrinkar01/rewind)
@@ -22,19 +23,19 @@
 
 ## The Problem Rewind Solves
 
-When a software pipeline, server, or script crashes, standard debuggers and terminals only show **The Point of Death**:
+When a software pipeline, server, or script crashes, standard debuggers only show **The Point of Death**:
 
 ```text
-TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'
+TypeError: unsupported operand type(s) for +: 'float' and 'NoneType'
 File "billing_engine.py", line 84, in calculate_final_invoice
 ```
 
-A standard terminal tells you that line 84 crashed because `tax_exempt` was `None`. **It cannot answer:**
-* **WHO** mutated `tax_exempt` to `None`?
-* **WHEN** was it changed? *(Step 2, Step 6, or a helper function called 15 minutes ago?)*
+A standard terminal tells you that line 84 crashed because `tax` was `None`. **It cannot answer:**
+* **WHO** mutated `tax` to `None`?
+* **WHEN** was it changed? *(Step 1, Step 3, or a helper function called earlier?)*
 * **WHAT** did the program memory look like 3 steps *before* the crash?
 
-Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repetitive loop of adding `print()` statements and restarting from scratch.
+Without Rewind, developers spend hours adding `print()` statements and restarting processes from scratch.
 
 ---
 
@@ -47,7 +48,7 @@ Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repeti
 
 1. **Deterministic Recording:** Rewind captures microsecond-level memory snapshots before and after every transition.
 2. **Time-Travel Scrubbing:** Drag the timeline slider **backward in time** to find the exact frame where a variable was corrupted.
-3. **Live Hot-Code Sandbox:** Rewrite broken logic directly in the browser dashboard and verify downstream steps in **0.5 ms** in memory.
+3. **Interactive Drag-Resizable Sandbox:** Edit broken logic directly in the browser dashboard with full Tab indentation and dynamic drag resizing.
 4. **1-Click Atomic Disk Sync:** Click **"Save Fix to Local File"** to apply the fix directly to your source file with automatic `.bak` backups.
 
 ---
@@ -57,42 +58,11 @@ Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repeti
 | Capability | What It Does | Performance |
 | :--- | :--- | :--- |
 | **Time-Travel Recording** | Captures before/after memory snapshots across transitions | Microsecond timing |
-| **Sub-Microsecond Diffing** | Recursive $O(N)$ state comparator detecting `+` added, `~` mutated, and `-` removed keys | **$< 0.001$ seconds** |
-| **Hot-Code Sandbox** | In-memory code patcher to test logic without restarting processes or resetting databases | **0.5 ms latency** |
+| **Sub-Microsecond Diffing** | Recursive $O(1)$ cycle-pruned state comparator detecting `+` added, `~` mutated, and `-` removed keys | **$< 0.001$ seconds** |
+| **Hot-Code Sandbox** | In-memory code patcher with cursor drag resizing to test logic without restarting processes | **0.5 ms latency** |
 | **1-Click Disk Patcher** | Writes verified fixes directly to local source files with recursive file discovery & backups | Instant |
-| **Universal Process Runner** | Traces Python scripts and monitors **Next.js, Node, Go, Rust, C++, and Docker** processes | Live I/O stream |
-| **Root-Cause Diagnostics** | Automated heuristic analyzer detecting poisoned variables and unclosed syntax errors | Instant |
+| **Universal Process Runner** | Traces Python scripts and monitors **Node.js, Next.js, Go, Rust, and Docker** processes | Live I/O stream |
 | **Zero External Dependencies** | Built 100% on Python standard libraries and vanilla web technologies | Pure Stdlib |
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph Execution ["1. Execution Layer"]
-        A["Python Script / Server"] -->|"rewind run / rewind exec"| B["Tracer Engine"]
-        C["sys.settrace() / Subprocess Monitor"] --> B
-    end
-
-    subgraph DiffEngine ["2. State Diff Engine"]
-        B --> D["serialize_state()"]
-        D --> E["compute_state_diff()"]
-        E --> F[("rewind_trace.json")]
-    end
-
-    subgraph Dashboard ["3. Web Cockpit"]
-        F --> G["HTTP Server"]
-        G --> H["Time-Travel Scrubber"]
-        H --> I["Hero Crash Banner"]
-    end
-
-    subgraph Sandbox ["4. Hot-Code Patcher"]
-        H --> J["In-Memory Sandbox"]
-        J -->|"POST /api/replay"| K["Hot Replayer (0.5ms)"]
-        K -->|"POST /api/patch"| L["Local File on Disk (.bak)"]
-    end
-```
 
 ---
 
@@ -100,12 +70,18 @@ flowchart LR
 
 ### 1. Installation
 
-Clone the repository and install in editable mode:
+Install globally from **PyPI**:
+
+```bash
+pip install rewind-debug
+```
+
+*Or install from source:*
 
 ```bash
 git clone https://github.com/hrinkar01/rewind.git
 cd rewind
-pip3 install -e .
+pip install -e .
 ```
 
 ---
@@ -117,9 +93,10 @@ Trace any Python script with **zero code modifications**:
 ```bash
 rewind run tests/broken_pipeline.py
 ```
+*(Or use `rewind-debug run tests/broken_pipeline.py`)*
 
 * Intercepts `stdout`/`stderr` live in the console.
-* Captures fatal exceptions and traceback stack frames.
+* Captures fatal exceptions, stack frames, and multi-step function call states.
 * Automatically launches the interactive web scrubber at `http://localhost:8765`.
 
 ---
@@ -129,11 +106,11 @@ rewind run tests/broken_pipeline.py
 Run any language, framework, or containerized workflow through Rewind:
 
 ```bash
-# Next.js / React / Vite
-rewind exec npm run dev
-
 # Node.js Server
 rewind exec node server.js
+
+# Next.js / React / Vite
+rewind exec npm run dev
 
 # Go Backend
 rewind exec go run main.go
@@ -192,6 +169,8 @@ tracer.export("rewind_trace.json")
 ---
 
 ## CLI Reference
+
+Both `rewind` and `rewind-debug` CLI commands are available:
 
 | Command | Description | Example |
 | :--- | :--- | :--- |
