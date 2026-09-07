@@ -119,8 +119,12 @@
                             <span>Python Source Code:</span>
                             <span class="font-mono text-muted" id="sandboxStepLabel">script.py</span>
                         </div>
+                        <div class="editor-active-line-badge" id="editorActiveLineBadge">Line 1</div>
                     </div>
-                    <textarea class="code-editor" id="sandboxCodeEditor" spellcheck="false" placeholder="Write or fix Python code here..."></textarea>
+                    <div class="code-editor-layout">
+                        <div class="line-numbers-gutter" id="lineNumbersGutter"><div>1</div></div>
+                        <textarea class="code-editor" id="sandboxCodeEditor" spellcheck="false" placeholder="Write or fix Python code here..."></textarea>
+                    </div>
                     
                     <!-- Sleek Interactive Drag Resizer Handle -->
                     <div class="editor-resizer" id="editorResizer" title="Drag to resize code box">

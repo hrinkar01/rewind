@@ -483,14 +483,68 @@ body {
 }
 
 .root-cause-hint {
-    margin-top: 4px;
-    background: rgba(251, 191, 36, 0.1);
-    border: 1px solid rgba(251, 191, 36, 0.3);
-    border-radius: 6px;
-    padding: 8px 12px;
+    margin-top: 8px;
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    border-radius: 8px;
+    padding: 12px 14px;
     font-size: 12px;
     color: #fde68a;
-    line-height: 1.4;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.root-cause-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 800;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #f59e0b;
+}
+
+.root-cause-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.root-cause-field {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(251, 191, 36, 0.15);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.root-cause-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #d97706;
+    margin-bottom: 2px;
+}
+
+.root-cause-val {
+    font-size: 12px;
+    color: #fef3c7;
+}
+
+.root-cause-code {
+    font-family: var(--font-mono);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #a7f3d0;
+    font-size: 11px;
+    margin-top: 4px;
+    display: inline-block;
 }
 
 /* State Diff Feed */
@@ -562,19 +616,82 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+.editor-active-line-badge {
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 700;
-    color: var(--text-secondary);
+    color: var(--accent-purple);
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.editor-active-line-badge.crashed {
+    color: var(--accent-rose);
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.35);
+}
+
+.code-editor-layout {
+    display: flex;
+    position: relative;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 6px;
+    background: #030712;
+    overflow: hidden;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.1);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.code-editor-layout:focus-within {
+    border-color: #a855f7;
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+}
+
+.line-numbers-gutter {
+    width: 44px;
+    padding: 12px 6px 12px 0;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: #475569;
+    background: #060913;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    user-select: none;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.gutter-line {
+    padding-right: 6px;
+    transition: all 0.15s ease;
+}
+
+.gutter-line.active {
+    color: var(--accent-purple);
+    font-weight: 800;
+    background: rgba(168, 85, 247, 0.2);
+    border-right: 2px solid var(--accent-purple);
+}
+
+.gutter-line.crashed {
+    color: var(--accent-rose);
+    font-weight: 800;
+    background: rgba(244, 63, 94, 0.25);
+    border-right: 2px solid var(--accent-rose);
 }
 
 .code-editor {
-    width: 100%;
+    flex: 1;
     min-height: 200px;
     height: 280px;
     max-height: 85vh;
-    background: #030712;
-    border: 1px solid rgba(168, 85, 247, 0.4);
-    border-radius: 6px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     color: #f3e8ff;
     font-family: var(--font-mono);
     font-size: 13px;
@@ -582,15 +699,9 @@ body {
     padding: 12px;
     outline: none;
     resize: vertical;
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.1);
     tab-size: 4;
     white-space: pre;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.code-editor:focus {
-    border-color: #a855f7;
-    box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+    box-shadow: none;
 }
 
 .code-editor::-webkit-resizer {

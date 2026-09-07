@@ -45,8 +45,11 @@ const snapshotViewer = document.getElementById("snapshotViewer");
 const logsViewer = document.getElementById("logsViewer");
 
 // Sandbox Elements
+// Sandbox & Gutter Elements
 const sandboxStepLabel = document.getElementById("sandboxStepLabel");
 const sandboxCodeEditor = document.getElementById("sandboxCodeEditor");
+const lineNumbersGutter = document.getElementById("lineNumbersGutter");
+const editorActiveLineBadge = document.getElementById("editorActiveLineBadge");
 const replaySandboxBtn = document.getElementById("replaySandboxBtn");
 const applyPatchBtn = document.getElementById("applyPatchBtn");
 const copyDiffBtn = document.getElementById("copyDiffBtn");
@@ -68,6 +71,10 @@ const loadTraceBtn = document.getElementById("loadTraceBtn");
 const traceFileInput = document.getElementById("traceFileInput");
 const stopServerBtn = document.getElementById("stopServerBtn");
 
+// Active Editor State
+let currentActiveLine = 1;
+let currentIsCrashed = false;
+
 // Initialize: Load real trace from server
 async function initApp() {
   setupEventListeners();
@@ -82,6 +89,148 @@ async function initApp() {
   } catch (e) {
     console.log("No default rewind_trace.json found. Ready to load custom trace.");
   }
+}
+
+function getStepLineNumber(step) {
+  if (step.caller_line && step.caller_line > 0) {
+    return step.caller_line;
+  }
+  if (step.error?.traceback) {
+    const matches = [...step.error.traceback.matchAll(/line (\d+)/g)];
+    if (matches.length > 0) {
+      return parseInt(matches[matches.length - 1][1], 10);
+    }
+  }
+  return 1;
+}
+
+function updateLineGutter(code, activeLine, isCrashed = false) {
+  if (!lineNumbersGutter) return;
+  const lines = (code || "").split("\n");
+  const total = Math.max(1, lines.length);
+
+  let gutterHtml = "";
+  for (let i = 1; i <= total; i++) {
+    const isTarget = i === activeLine;
+    let cls = "gutter-line";
+    if (isTarget) {
+      cls += isCrashed ? " crashed" : " active";
+    }
+    gutterHtml += `<div class="${cls}" data-line="${i}">${i}</div>`;
+  }
+  lineNumbersGutter.innerHTML = gutterHtml;
+
+  if (editorActiveLineBadge) {
+    if (activeLine && activeLine > 0) {
+      editorActiveLineBadge.textContent = isCrashed ? `Line ${activeLine} (Crashed)` : `Line ${activeLine}`;
+      editorActiveLineBadge.className = isCrashed ? "editor-active-line-badge crashed" : "editor-active-line-badge";
+      editorActiveLineBadge.style.display = "inline-block";
+    } else {
+      editorActiveLineBadge.style.display = "none";
+    }
+  }
+
+  // Scroll active line into view in editor
+  if (activeLine && activeLine > 0) {
+    const lineHeight = 20.8;
+    const targetScroll = Math.max(0, (activeLine - 3) * lineHeight);
+    sandboxCodeEditor.scrollTop = targetScroll;
+    lineNumbersGutter.scrollTop = targetScroll;
+  }
+}
+
+function analyzeRootCause(trace, stepIndex) {
+  if (!trace || stepIndex < 0 || stepIndex >= trace.steps.length) return null;
+  const step = trace.steps[stepIndex];
+  if (step.status !== "FAILED" && !step.error) return null;
+
+  const errType = step.error?.type || "ExecutionError";
+  const errMsg = step.error?.message || "";
+  const errTrace = step.error?.traceback || "";
+  const combined = `${errType}: ${errMsg}\n${errTrace}`;
+
+  let diagnosis = "Uncaught runtime exception";
+  let culprit = "Unknown expression";
+  let why = "An unhandled exception interrupted script execution.";
+  let fix = "Review the execution stack and guard against unexpected values.";
+  let fixSnippet = "";
+
+  if (combined.includes("TypeError") && (combined.includes("NoneType") || combined.includes("unsupported operand"))) {
+    diagnosis = "Null / NoneType Propagation";
+    why = "An operation was performed on a variable holding 'None' instead of a valid value.";
+
+    let upstreamCulprit = "";
+    for (let i = stepIndex - 1; i >= 0; i--) {
+      const prev = trace.steps[i];
+      if (prev.output === null || (typeof prev.output === "object" && prev.output !== null && Object.values(prev.output).some(v => v === null))) {
+        upstreamCulprit = prev.name;
+        break;
+      }
+    }
+
+    if (upstreamCulprit) {
+      culprit = `Returned None from ${upstreamCulprit}`;
+      why += ` Upstream step '${upstreamCulprit}' produced a null/None output without a default return fallback.`;
+    } else {
+      culprit = "Missing function return or null dictionary value";
+    }
+    fix = "Provide a default fallback (e.g., 'val = val or 0.0' or ensure all function branches return a numeric value).";
+    fixSnippet = "if value is None:\n    value = 0.0";
+
+  } else if (combined.includes("KeyError")) {
+    const match = errMsg.match(/['"]([^'"]+)['"]/);
+    const keyName = match ? match[1] : "key";
+    diagnosis = "Missing Dictionary Key";
+    culprit = `dict['${keyName}']`;
+    why = `The key '${keyName}' was accessed directly with bracket notation before being defined.`;
+    fix = `Use safe lookup: 'dict.get("${keyName}", default_value)' or check 'if "${keyName}" in dict:'.`;
+    fixSnippet = `val = data.get("${keyName}", None)`;
+
+  } else if (combined.includes("IndexError")) {
+    diagnosis = "List Index Out of Range";
+    culprit = "Array / List index";
+    why = "Attempted to access an index that exceeds the current array length.";
+    fix = "Add boundary check 'if len(items) > index:' before accessing elements.";
+    fixSnippet = "if index < len(items):\n    item = items[index]";
+
+  } else if (combined.includes("ZeroDivisionError")) {
+    diagnosis = "Division by Zero";
+    culprit = "Denominator evaluated to 0";
+    why = "A division or modulo operation was executed with a denominator value of zero.";
+    fix = "Guard the division with 'if denominator != 0: ... else: ...'.";
+    fixSnippet = "result = (numerator / denominator) if denominator != 0 else 0";
+
+  } else if (combined.includes("AttributeError") && combined.includes("NoneType")) {
+    diagnosis = "Attribute Access on NoneType Object";
+    culprit = "Uninitialized / None object reference";
+    why = "Attempted to access methods or properties on a variable that evaluated to 'None'.";
+    fix = "Verify object initialization or add 'if obj is not None:' guard.";
+    fixSnippet = "if obj is not None:\n    obj.do_something()";
+
+  } else if (combined.includes("SyntaxError") || combined.includes("unterminated string") || combined.includes("invalid syntax")) {
+    diagnosis = "Python Syntax Violation";
+    culprit = `Line ${getStepLineNumber(step)}`;
+    why = "Unclosed string quote, unmatched parenthesis/bracket, or invalid token.";
+    fix = "Check the syntax at the highlighted line in the Hot-Code Sandbox editor.";
+    fixSnippet = "# Ensure all quotes and parentheses are cleanly closed";
+
+  } else if (combined.includes("No module named") || combined.includes("ModuleNotFoundError")) {
+    const match = combined.match(/No module named ['"]([^'"]+)['"]/);
+    const pkg = match ? match[1] : "dependency";
+    diagnosis = "Missing Python Package";
+    culprit = `import ${pkg}`;
+    why = `The module '${pkg}' is not installed in the active Python environment.`;
+    fix = `Run 'pip install ${pkg}' in your terminal.`;
+    fixSnippet = `pip install ${pkg}`;
+
+  } else if (combined.includes("ProcessError") || combined.includes("NpmScriptError")) {
+    diagnosis = "Process / Script Execution Failure";
+    culprit = "Non-zero exit code or stderr stream";
+    why = step.error?.message || "Subprocess exited with an error status.";
+    fix = "Inspect standard error logs and review configuration options.";
+  }
+
+  return { diagnosis, culprit, why, fix, fixSnippet };
 }
 
 function loadTraceData(data) {
@@ -198,30 +347,48 @@ function setStep(index) {
     sandboxCodeEditor.value = `# Source code for ${targetFile}\n`;
   }
 
+  const isCrashed = step.status === "FAILED" || !!step.error;
+  const targetLine = getStepLineNumber(step);
+  currentActiveLine = targetLine;
+  currentIsCrashed = isCrashed;
+
+  // Update Gutter and Line Numbers
+  updateLineGutter(sandboxCodeEditor.value, targetLine, isCrashed);
+
   // Check for crash at this step
-  if (step.status === "FAILED" || step.error) {
+  if (isCrashed) {
     heroCrashBanner.style.display = "flex";
-    bannerLocation.textContent = `${step.caller_file || "script.py"}:L${step.caller_line || 1}`;
+    bannerLocation.textContent = `${step.caller_file || targetFile.split("/").pop()}:L${targetLine}`;
     bannerErrorType.textContent = `${step.error?.type || "Fatal Execution Crash"}`;
     bannerErrorMsg.textContent = step.error?.message || "An unhandled exception caused this step to fail.";
 
-    const errMsg = (step.error?.message || "") + " " + (step.error?.traceback || "");
-    let rootHint = "";
-
-    if (errMsg.includes("SyntaxError") || errMsg.includes("unterminated string") || errMsg.includes("never closed")) {
-      rootHint = `<b>Root Cause Analysis:</b> Syntax error in code (unclosed quote, bracket, or misplaced character).<br><b>Fix:</b> Edit line directly in the <b>Hot-Code Sandbox</b> tab below, test in memory and apply to disk.`;
-    } else if (errMsg.includes("No module named")) {
-      const match = errMsg.match(/No module named ['"]([^'"]+)['"]/);
-      const pkg = match ? match[1] : "module";
-      rootHint = `<b>Root Cause Analysis:</b> Missing Python dependency <code>${pkg}</code>.<br><b>Fix:</b> Run <code>pip install ${pkg}</code> in your terminal.`;
-    } else if (errMsg.includes("Missing script")) {
-      rootHint = "<b>Root Cause Analysis:</b> npm script is missing in <code>package.json</code>.<br><b>Fix:</b> Use <code>npm start</code> instead of <code>npm run dev</code>.";
-    } else if (errMsg.includes("KeyError")) {
-      rootHint = `<b>Root Cause Analysis:</b> Dictionary key was accessed before being initialized.`;
+    const diag = analyzeRootCause(currentTrace, index);
+    if (diag) {
+      rootCauseHint.innerHTML = `
+        <div class="root-cause-header">
+          <span>Automated Root-Cause Diagnostic Analyzer</span>
+          <span>${diag.diagnosis}</span>
+        </div>
+        <div class="root-cause-grid">
+          <div class="root-cause-field">
+            <span class="root-cause-label">Probable Cause</span>
+            <div class="root-cause-val">${diag.why}</div>
+          </div>
+          <div class="root-cause-field">
+            <span class="root-cause-label">Culprit Origin</span>
+            <div class="root-cause-val"><code>${diag.culprit}</code></div>
+          </div>
+        </div>
+        <div class="root-cause-field" style="margin-top: 2px;">
+          <span class="root-cause-label">Recommended Fix</span>
+          <div class="root-cause-val">${diag.fix}</div>
+          ${diag.fixSnippet ? `<div class="root-cause-code">${diag.fixSnippet}</div>` : ""}
+        </div>
+      `;
+      rootCauseHint.style.display = "flex";
+    } else {
+      rootCauseHint.style.display = "none";
     }
-
-    rootCauseHint.innerHTML = rootHint;
-    rootCauseHint.style.display = rootHint ? "block" : "none";
 
     diagStatus.innerHTML = '<span class="status-pill status-failed">FAILED</span>';
     crashBox.style.display = "flex";
@@ -247,7 +414,7 @@ function setStep(index) {
   }
 
   // Diagnostics
-  diagLocation.textContent = `${step.caller_file || "script.py"}:L${step.caller_line || 1}`;
+  diagLocation.textContent = `${step.caller_file || targetFile.split("/").pop()}:L${targetLine}`;
   diagDuration.textContent = `${step.duration_us || 0} us`;
 }
 
@@ -364,6 +531,17 @@ function setupEventListeners() {
     });
   }
 
+  // Hot-Code Sandbox: Synchronize Gutter Scroll & Dynamic Typing
+  sandboxCodeEditor.addEventListener("scroll", () => {
+    if (lineNumbersGutter) {
+      lineNumbersGutter.scrollTop = sandboxCodeEditor.scrollTop;
+    }
+  });
+
+  sandboxCodeEditor.addEventListener("input", () => {
+    updateLineGutter(sandboxCodeEditor.value, currentActiveLine, currentIsCrashed);
+  });
+
   // Hot-Code Sandbox: Tab Key Indentation (4 spaces)
   sandboxCodeEditor.addEventListener("keydown", (e) => {
     if (e.key === "Tab") {
@@ -373,6 +551,7 @@ function setupEventListeners() {
       const val = sandboxCodeEditor.value;
       sandboxCodeEditor.value = val.substring(0, start) + "    " + val.substring(end);
       sandboxCodeEditor.selectionStart = sandboxCodeEditor.selectionEnd = start + 4;
+      updateLineGutter(sandboxCodeEditor.value, currentActiveLine, currentIsCrashed);
     }
   });
 

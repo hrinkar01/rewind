@@ -146,5 +146,23 @@ class TestRewindTracer(unittest.TestCase):
         self.assertEqual(len(tracer.state), 10)
 
 
+class TestRewindReplayEngine(unittest.TestCase):
+    def test_execute_hot_replay_clean(self):
+        from rewind.cli import execute_hot_replay
+        payload = {"code": "x = 10\ny = 20\nprint('SUM:', x + y)"}
+        res = execute_hot_replay(payload)
+        self.assertTrue(res["success"])
+        self.assertFalse(res["has_crash"])
+        self.assertIn("SUM: 30", res["stdout"])
+
+    def test_execute_hot_replay_crash_captured(self):
+        from rewind.cli import execute_hot_replay
+        payload = {"code": "x = 1 / 0"}
+        res = execute_hot_replay(payload)
+        self.assertFalse(res["success"])
+        self.assertTrue(res["has_crash"])
+        self.assertIn("ZeroDivisionError", res["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

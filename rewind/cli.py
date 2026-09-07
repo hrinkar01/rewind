@@ -351,9 +351,38 @@ def run_python_command(args):
         elapsed = round((time.time() - start_time) * 1000, 2)
         out = args.output or "rewind_trace.json"
         tracer.export(out)
-        print(f"\n[Rewind] Trace saved: {out} ({len(tracer.steps)} steps, {elapsed} ms)")
-        if not args.no_open:
-            view_trace(out, port=args.port)
+
+        is_ci = getattr(args, "ci", False) or getattr(args, "headless", False)
+        no_open = args.no_open or is_ci
+
+        if is_ci:
+            print("\n" + "=" * 60)
+            print(" REWIND CI EXECUTION REPORT")
+            print("=" * 60)
+            print(f" Target Script : {os.path.basename(script_path)}")
+            print(f" Total Steps   : {len(tracer.steps)}")
+            print(f" Total Time    : {elapsed} ms")
+            print(f" Trace Output  : {out}")
+            print("-" * 60)
+            for idx, st in enumerate(tracer.steps, start=1):
+                status_str = f"[{st.status}]" if st.status else "[SUCCESS]"
+                dur_str = f"{st.duration_us} us" if hasattr(st, "duration_us") and st.duration_us else "<1 us"
+                loc_str = f"{st.caller_file}:L{st.caller_line}" if st.caller_file else ""
+                print(f" #{idx:02d} {status_str:<10} {dur_str:>10} | {st.name:<30} {loc_str}")
+            print("-" * 60)
+
+            if has_error:
+                print(f" RESULT: CRASH DETECTED (Exiting with code 1)")
+                print("=" * 60 + "\n")
+                sys.exit(1)
+            else:
+                print(f" RESULT: ALL STEPS PASSED CLEANLY (Exiting with code 0)")
+                print("=" * 60 + "\n")
+                sys.exit(0)
+        else:
+            print(f"\n[Rewind] Trace saved: {out} ({len(tracer.steps)} steps, {elapsed} ms)")
+            if not no_open:
+                view_trace(out, port=args.port)
 
 
 # --------------------------------------------------------------------------
@@ -444,9 +473,38 @@ def exec_process_command(args):
 
     out = args.output or "rewind_trace.json"
     tracer.export(out)
-    print(f"\n[Rewind] Process exited with code {return_code}. Trace saved to: {out}")
-    if not args.no_open:
-        view_trace(out, port=args.port)
+
+    is_ci = getattr(args, "ci", False) or getattr(args, "headless", False)
+    no_open = args.no_open or is_ci
+
+    if is_ci:
+        elapsed = round((time.time() - start_time) * 1000, 2)
+        print("\n" + "=" * 60)
+        print(" REWIND CI PROCESS EXECUTION REPORT")
+        print("=" * 60)
+        print(f" Command       : {' '.join(cmd)}")
+        print(f" Exit Code     : {return_code}")
+        print(f" Total Steps   : {len(tracer.steps)}")
+        print(f" Total Time    : {elapsed} ms")
+        print(f" Trace Output  : {out}")
+        print("-" * 60)
+        for idx, st in enumerate(tracer.steps, start=1):
+            status_str = f"[{st.status}]" if st.status else "[SUCCESS]"
+            print(f" #{idx:02d} {status_str:<10} | {st.name:<40}")
+        print("-" * 60)
+
+        if return_code != 0 or stderr_out:
+            print(f" RESULT: PROCESS FAILURE DETECTED (Exiting with code {return_code or 1})")
+            print("=" * 60 + "\n")
+            sys.exit(return_code or 1)
+        else:
+            print(" RESULT: PROCESS COMPLETED CLEANLY (Exiting with code 0)")
+            print("=" * 60 + "\n")
+            sys.exit(0)
+    else:
+        print(f"\n[Rewind] Process exited with code {return_code}. Trace saved to: {out}")
+        if not no_open:
+            view_trace(out, port=args.port)
 
 
 # --------------------------------------------------------------------------
@@ -540,14 +598,16 @@ def main():
     run_p = subparsers.add_parser("run", help="Auto-trace a Python script with zero code changes")
     run_p.add_argument("-o", "--output", default="rewind_trace.json")
     run_p.add_argument("-p", "--port", type=int, default=8765)
-    run_p.add_argument("--no-open", action="store_true")
+    run_p.add_argument("--no-open", action="store_true", help="Do not automatically launch the browser")
+    run_p.add_argument("--ci", "--headless", dest="ci", action="store_true", help="Run headlessly for CI/CD test automation and return exit code")
     run_p.add_argument("script", help="Target Python script")
     run_p.set_defaults(func=run_python_command)
 
     exec_p = subparsers.add_parser("exec", help="Trace ANY command/server (Node.js, Go, Docker, etc.)")
     exec_p.add_argument("-o", "--output", default="rewind_trace.json")
     exec_p.add_argument("-p", "--port", type=int, default=8765)
-    exec_p.add_argument("--no-open", action="store_true")
+    exec_p.add_argument("--no-open", action="store_true", help="Do not automatically launch the browser")
+    exec_p.add_argument("--ci", "--headless", dest="ci", action="store_true", help="Run headlessly for CI/CD test automation and return exit code")
     exec_p.add_argument("command", nargs=argparse.REMAINDER, help="Command and args to execute")
     exec_p.set_defaults(func=exec_process_command)
 
