@@ -56,6 +56,8 @@ Without Rewind, developers spend **45 minutes to 3 hours** trapped in the repeti
 
 | Capability | What It Does | Performance |
 | :--- | :--- | :--- |
+| **Line-Level Micro-Tracer** | Statement-by-statement execution tracking with source line previews and callstack depth | Microsecond precision |
+| **Lexical Scope Isolation** | Strict frame-scoped local variable isolation and dunder filtering across nested calls | Zero scope leakage |
 | **Time-Travel Recording** | Captures before/after memory snapshots across transitions | Microsecond timing |
 | **Sub-Microsecond Diffing** | Recursive $O(N)$ state comparator detecting `+` added, `~` mutated, and `-` removed keys | **$< 0.001$ seconds** |
 | **Hot-Code Sandbox** | In-memory code patcher to test logic without restarting processes or resetting databases | **0.5 ms latency** |
@@ -226,6 +228,9 @@ python3 -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 ```text
+test_line_level_tracing_and_scope_isolation ... ok
+test_execute_hot_replay_clean ... ok
+test_execute_hot_replay_crash_captured ... ok
 test_circular_reference_protection ... ok
 test_custom_class_serialization ... ok
 test_primitive_serialization ... ok
@@ -241,7 +246,7 @@ test_tracer_crash_capture ... ok
 test_tracer_step_lifecycle ... ok
 
 ----------------------------------------------------------------------
-Ran 13 tests in 0.002s
+Ran 16 tests in 0.097s
 
 OK
 ```
