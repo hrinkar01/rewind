@@ -20,6 +20,7 @@ import urllib.parse
 import webbrowser
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+import linecache 
 
 # Allow direct execution from ANY directory
 parent_dir = str(Path(__file__).resolve().parent.parent)
@@ -198,77 +199,109 @@ def apply_patch_to_disk(payload: dict) -> dict:
         return {"success": False, "error": str(e)}
 
 
-# --------------------------------------------------------------------------
-# Mode 1: Auto Python Script Tracer (Multi-Step Callstack Frame Tracker)
-# --------------------------------------------------------------------------
-def auto_trace_hook(tracer: Tracer):
-    last_state = {}
-    frame_steps = {}
+def clean_frame_locals(locals_dict: dict) -> dict:
+    """Filters out internal python dunder attributes (e.g. __builtins__, __doc__)."""
+    return {k: v for k, v in locals_dict.items() if not (k.startswith("__") and k.endswith("__"))}
 
-    def trace_calls(frame, event, arg):
-        nonlocal last_state
+
+# --------------------------------------------------------------------------
+# Mode 1: Line-Level Micro-Tracer with Strict Frame-Scope Isolation
+# --------------------------------------------------------------------------
+def auto_trace_hook(tracer: Tracer, target_filepath: str, max_steps: int = 3000):
+    """
+    High-precision line-level execution tracer.
+    Tracks statement-by-statement variable mutations with strict lexical frame isolation.
+    """
+    target_abs = os.path.abspath(target_filepath) if target_filepath else ""
+    target_dir = os.path.dirname(target_abs) if target_abs else ""
+    
+    frame_scopes = {}       # frame_id -> last_known_locals_dict
+    call_depth = 0
+
+    def trace_dispatcher(frame, event, arg):
+        nonlocal call_depth
         filename = frame.f_code.co_filename
-        
-        # Only ignore Rewind internal files or stdlib
-        if filename.startswith(REWIND_INTERNAL_DIR) or filename.startswith("<") or "/lib/python" in filename or "site-packages" in filename:
-            return trace_calls
+        if not filename:
+            return trace_dispatcher
 
+        # Only trace files belonging to the project / target script (ignore stdlib & rewind internals)
+        if filename.startswith(REWIND_INTERNAL_DIR) or filename.startswith("<") or "/lib/python" in filename or "site-packages" in filename:
+            return trace_dispatcher
+
+        abs_file = os.path.abspath(filename)
+        # Match target file or files in same directory
+        if target_abs and abs_file != target_abs and not abs_file.startswith(target_dir):
+            return trace_dispatcher
+
+        frame_id = id(frame)
         func_name = frame.f_code.co_name
         line_no = frame.f_lineno
-        frame_id = id(frame)
 
         if event == "call":
-            if func_name in ("<module>", "main"):
-                return trace_calls
+            call_depth += 1
+            # Snapshot initial frame locals on call
+            frame_scopes[frame_id] = serialize_state(clean_frame_locals(frame.f_locals))
+            return trace_dispatcher
+
+        elif event == "line":
+            if tracer._step_counter >= max_steps:
+                return trace_dispatcher
+
+            line_code = linecache.getline(filename, line_no).strip()
+            # Skip empty lines and comments
+            if not line_code or line_code.startswith("#"):
+                return trace_dispatcher
+
             tracer._step_counter += 1
             curr_id = tracer._step_counter
-            step_inputs = dict(frame.f_locals)
-            if tracer.source_code:
-                step_inputs["source_code"] = tracer.source_code
-            if tracer.source_filepath:
-                step_inputs["filepath"] = tracer.source_filepath
+
+            prev_locals = frame_scopes.get(frame_id, {})
+            curr_locals = serialize_state(clean_frame_locals(frame.f_locals))
+            diff = compute_state_diff(prev_locals, curr_locals)
 
             step = TraceStep(
                 step_id=curr_id,
-                name=f"{func_name}()",
+                name=f"{func_name}(): L{line_no}",
                 caller_file=os.path.basename(filename),
                 caller_line=line_no,
-                inputs=serialize_state(step_inputs),
+                line_code=line_code,
+                scope=f"{func_name}()" if func_name != "<module>" else "<module>",
+                call_depth=call_depth,
+                inputs={"line_code": line_code, "scope": func_name, "line_no": line_no},
             )
-            step.state_before = serialize_state(last_state)
-            frame_steps[frame_id] = step
+            step.state_before = prev_locals
+            step.state_after = curr_locals
+            step.diff = diff
+            step.status = "SUCCESS"
+
+            # Update this frame's snapshot
+            frame_scopes[frame_id] = curr_locals
+            tracer.steps.append(step)
 
         elif event == "return":
-            step = frame_steps.pop(frame_id, None)
-            if step:
-                step.output = serialize_state(arg)
-                state_now = dict(last_state)
-                state_now.update(dict(frame.f_locals))
-                if isinstance(arg, dict):
-                    state_now.update(arg)
-                elif arg is not None:
-                    state_now[f"{func_name}_result"] = arg
-                step.state_after = serialize_state(state_now)
-                step.diff = compute_state_diff(step.state_before, step.state_after)
-                step.status = "SUCCESS"
-                last_state = dict(state_now)
-                tracer.steps.append(step)
+            call_depth = max(0, call_depth - 1)
+            # Evict frame to prevent scope leakage
+            frame_scopes.pop(frame_id, None)
 
         elif event == "exception":
-            step = frame_steps.get(frame_id)
-            if step:
-                exc_type, exc_value, _ = arg
-                step.status = "FAILED"
-                step.error = {
-                    "type": exc_type.__name__,
-                    "message": str(exc_value),
-                    "source_code": tracer.source_code,
-                    "filepath": tracer.source_filepath,
-                }
+            exc_type, exc_value, _ = arg
+            line_code = linecache.getline(filename, line_no).strip()
+            if tracer.steps:
+                last_step = tracer.steps[-1]
+                if last_step.status != "FAILED":
+                    last_step.status = "FAILED"
+                    last_step.error = {
+                        "type": exc_type.__name__,
+                        "message": str(exc_value),
+                        "line": line_no,
+                        "line_code": line_code,
+                        "source_code": tracer.source_code,
+                        "filepath": tracer.source_filepath,
+                    }
 
-        return trace_calls
+        return trace_dispatcher
 
-    return trace_calls
+    return trace_dispatcher
 
 
 def run_python_command(args):
@@ -294,7 +327,7 @@ def run_python_command(args):
     tee_out = LiveTeeStream(sys.stdout)
     tee_err = LiveTeeStream(sys.stderr)
 
-    sys.settrace(auto_trace_hook(tracer))
+    sys.settrace(auto_trace_hook(tracer, script_path))
     start_time = time.time()
     has_error = False
     try:
