@@ -164,5 +164,55 @@ class TestRewindReplayEngine(unittest.TestCase):
         self.assertIn("ZeroDivisionError", res["error"])
 
 
+class TestLineLevelTracer(unittest.TestCase):
+    def test_line_level_tracing_and_scope_isolation(self):
+        import sys
+        from rewind.cli import auto_trace_hook
+        from rewind.tracer import Tracer
+
+        sample_code = """
+def func_a():
+    a_var = 100
+    return a_var
+
+def func_b():
+    b_var = 200
+    return b_var
+
+x = func_a()
+y = func_b()
+"""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            sample_file = os.path.join(temp_dir, "sample_scope.py")
+            with open(sample_file, "w", encoding="utf-8") as f:
+                f.write(sample_code.strip())
+
+            tracer = Tracer(title="Scope Isolation Test")
+            sys.settrace(auto_trace_hook(tracer, sample_file))
+            try:
+                compiled = compile(sample_code.strip(), sample_file, "exec")
+                exec(compiled, {"__name__": "__main__", "__file__": sample_file})
+            finally:
+                sys.settrace(None)
+
+            self.assertGreater(len(tracer.steps), 0)
+            
+            # Verify func_b steps NEVER inherited a_var from func_a
+            func_b_steps = [s for s in tracer.steps if "func_b" in s.name]
+            self.assertGreater(len(func_b_steps), 0)
+            for s in func_b_steps:
+                self.assertNotIn("a_var", s.state_before)
+                self.assertNotIn("a_var", s.state_after)
+
+            # Verify line_code and caller_line are populated
+            for s in tracer.steps:
+                self.assertIsNotNone(s.line_code)
+                self.assertGreater(s.caller_line, 0)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
+
