@@ -21,12 +21,18 @@ class TraceStep:
         name: str,
         caller_file: str,
         caller_line: int,
+        line_code: str = "",
+        scope: str = "",
+        call_depth: int = 0,
         inputs: Optional[Dict[str, Any]] = None,
     ):
         self.step_id = step_id
         self.name = name
         self.caller_file = caller_file
         self.caller_line = caller_line
+        self.line_code = line_code
+        self.scope = scope
+        self.call_depth = call_depth
         self.inputs = inputs or {}
         self.output: Any = None
         self.state_before: Dict[str, Any] = {}
@@ -34,7 +40,7 @@ class TraceStep:
         self.diff: List[Dict[str, Any]] = []
         self.duration_us: float = 0.0
         self.timestamp: float = time.time()
-        self.status: str = "PENDING"
+        self.status: str = "SUCCESS"
         self.error: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -44,6 +50,9 @@ class TraceStep:
             "name": self.name,
             "caller_file": self.caller_file,
             "caller_line": self.caller_line,
+            "line_code": self.line_code,
+            "scope": self.scope,
+            "call_depth": self.call_depth,
             "inputs": self.inputs,
             "output": self.output,
             "state_before": self.state_before,
